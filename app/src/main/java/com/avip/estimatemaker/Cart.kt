@@ -3,24 +3,12 @@ package com.avip.estimatemaker
 import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
-import java.util.UUID
 
-/** The estimate being built. Kept on the phone so nothing is lost if the app closes. */
+/** The quotation being built. Kept on the phone so nothing is lost if the app closes. */
 object Cart {
     private const val PREFS = "cart"
 
     val lines = mutableListOf<Line>()
-
-    // Estimate details that belong with the cart
-    var type = EstimateType.AVIP_QUOTE
-    var customerName = ""
-    var customerPhone = ""
-    var customerAddress = ""
-    var marginPct = 0.0
-    var showRates = true
-    var showSubsidy = false
-    var subsidyOverride: Double? = null
-    var notes = ""
 
     private val listeners = mutableSetOf<() -> Unit>()
     private var loaded = false
@@ -36,32 +24,16 @@ object Cart {
             val o = JSONObject(p.getString("cart", "{}") ?: "{}")
             val arr = o.optJSONArray("lines") ?: JSONArray()
             lines.clear()
-            for (i in 0 until arr.length()) lines += Line.fromJson(arr.getJSONObject(i))
-            type = runCatching { EstimateType.valueOf(o.optString("type")) }.getOrDefault(EstimateType.AVIP_QUOTE)
-            customerName = o.optString("customerName")
-            customerPhone = o.optString("customerPhone")
-            customerAddress = o.optString("customerAddress")
-            marginPct = o.optDouble("marginPct", 0.0)
-            showRates = o.optBoolean("showRates", true)
-            showSubsidy = o.optBoolean("showSubsidy", false)
-            subsidyOverride = if (o.has("subsidyOverride")) o.optDouble("subsidyOverride") else null
-            notes = o.optString("notes")
+            for (i in 0 until arr.length()) {
+                val l = Line.fromJson(arr.getJSONObject(i))
+                if (l.productId != null) lines += l // drop items from the old "own item" feature
+            }
         } catch (_: Exception) {
         }
     }
 
     fun save(context: Context) {
-        val o = JSONObject()
-            .put("lines", JSONArray().apply { lines.forEach { put(it.toJson()) } })
-            .put("type", type.name)
-            .put("customerName", customerName)
-            .put("customerPhone", customerPhone)
-            .put("customerAddress", customerAddress)
-            .put("marginPct", marginPct)
-            .put("showRates", showRates)
-            .put("showSubsidy", showSubsidy)
-            .put("notes", notes)
-        subsidyOverride?.let { o.put("subsidyOverride", it) }
+        val o = JSONObject().put("lines", JSONArray().apply { lines.forEach { put(it.toJson()) } })
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .putString("cart", o.toString()).apply()
     }
@@ -85,15 +57,6 @@ object Cart {
         changed(context)
     }
 
-    fun addCustom(context: Context, name: String, unit: String, price: Double, gst: Double, qty: Double) {
-        lines += Line(
-            key = "C-" + UUID.randomUUID().toString().take(8),
-            productId = null, name = name, spec = "", unit = unit, price = price, gst = gst,
-            qty = qty, wp = 0.0, minQty = 0.0, icon = "service",
-        )
-        changed(context)
-    }
-
     fun remove(context: Context, line: Line) {
         lines.remove(line)
         changed(context)
@@ -101,12 +64,10 @@ object Cart {
 
     fun clear(context: Context) {
         lines.clear()
-        customerName = ""; customerPhone = ""; customerAddress = ""
-        subsidyOverride = null; notes = ""
         changed(context)
     }
 
-    /** Fresh prices from the sheet are applied to items already in the estimate. */
+    /** Fresh prices from the sheet are applied to items already in the quotation. */
     fun reprice(context: Context) {
         load(context)
         var any = false
@@ -120,25 +81,13 @@ object Cart {
         if (any) save(context)
     }
 
-    /** Puts a saved estimate back into the cart for editing. */
+    /** Puts a saved quotation back into the cart for editing. */
     fun loadFrom(context: Context, doc: EstimateDoc) {
         lines.clear()
-        lines += doc.lines.map { it.copy() }
-        type = doc.type
-        customerName = doc.customerName
-        customerPhone = doc.customerPhone
-        customerAddress = doc.customerAddress
-        marginPct = doc.marginPct
-        showRates = doc.showRates
-        showSubsidy = doc.showSubsidy
-        subsidyOverride = doc.subsidy.takeIf { doc.showSubsidy }
-        notes = doc.notes
+        lines += doc.lines.filter { it.productId != null }.map { it.copy() }
         reprice(context)
         changed(context)
     }
 
-    fun totals(): Totals = Calc.compute(lines, if (type == EstimateType.CUSTOMER) marginPct else 0.0)
-
-    /** Quick total for the bottom bar (AVIP prices, incl. GST). */
-    fun quickTotal(): Double = Calc.compute(lines, 0.0).grandTotal
+    fun totals(): Totals = Calc.compute(lines)
 }

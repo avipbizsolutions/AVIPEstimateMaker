@@ -18,7 +18,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-/** Home: greeting, search, System Builder, category tiles, estimates, AVIP contact. */
+/** Home: greeting, search, category tiles, saved quotations, AVIP contact. */
 class MainActivity : AppCompatActivity() {
 
     private lateinit var content: LinearLayout
@@ -41,7 +41,7 @@ class MainActivity : AppCompatActivity() {
             setPadding(dp(10), dp(10), dp(10), dp(10))
             setOnClickListener { startActivity(Intent(this@MainActivity, ProfileActivity::class.java)) }
         }
-        root.addView(topBar("AVIP Estimate Maker", "B2B Solar Price List", showBack = false,
+        root.addView(topBar("AVIP Estimate Maker", "B2B Solar Price List for Surya Saathi", showBack = false,
             right = listOf(refreshBtn, profileBtn, cartIcon)))
 
         content = vertical(14)
@@ -51,6 +51,18 @@ class MainActivity : AppCompatActivity() {
         setContentView(root)
         build()
         refreshPrices(false)
+        askNotificationsOnce()
+    }
+
+    /** Android 13+: allow the "app updated" notice. Asked once. */
+    private fun askNotificationsOnce() {
+        if (android.os.Build.VERSION.SDK_INT < 33) return
+        val prefs = getSharedPreferences("settings", MODE_PRIVATE)
+        if (prefs.getBoolean("asked_notifications", false)) return
+        prefs.edit().putBoolean("asked_notifications", true).apply()
+        if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 7)
+        }
     }
 
     override fun onResume() {
@@ -87,8 +99,8 @@ class MainActivity : AppCompatActivity() {
         content.addView(vertical(16) {
             background = gradient(dpf(18f), 0xFF0B5A33.toInt(), 0xFF14935A.toInt())
             elevation = dpf(3f)
-            addView(text("Namaste, ${Vendor.contact(context).substringBefore(' ').ifBlank { "Vendor" }} 👋", 20f, Color.WHITE, bold = true))
-            addView(text(Vendor.company(context), 13f, 0xDDFFFFFF.toInt()), lp().margins(context, t = 2))
+            addView(text("Namaste, ${Vendor.contact(context).substringBefore(' ').ifBlank { "Surya Saathi" }} 👋", 20f, Color.WHITE, bold = true))
+            addView(text("Surya Saathi · " + Vendor.company(context), 13f, 0xDDFFFFFF.toInt()), lp().margins(context, t = 2))
             val updated = s["price_last_updated"].ifBlank {
                 SimpleDateFormat("d MMM yyyy", Locale.ENGLISH).format(Date(Catalog.updatedAt))
             }
@@ -122,23 +134,6 @@ class MainActivity : AppCompatActivity() {
             }
         }, lp().margins(this, t = 14))
 
-        // System builder banner
-        content.addView(horizontal {
-            background = gradient(dpf(18f), 0xFFF7A21B.toInt(), 0xFFFFC94D.toInt())
-            setPadding(dp(16), dp(16), dp(16), dp(16))
-            elevation = dpf(3f)
-            addView(FrameLayout(context).apply {
-                background = rounded(0x33FFFFFF, dpf(14f))
-                addView(icon(R.drawable.ic_bolt, Ui.TEXT, 30), FrameLayout.LayoutParams(dp(30), dp(30), Gravity.CENTER))
-            }, lp(dp(54), dp(54)))
-            addView(vertical {
-                addView(text("Solar System Builder", 17f, Ui.TEXT, bold = true))
-                addView(text("Pick kW → we add panels & inverter for you", 12.5f, 0xCC17211B.toInt()))
-            }, lp(0, WRAP, 1f).margins(context, l = 14))
-            addView(text("›", 30f, Ui.TEXT, bold = true))
-            setOnClickListener { startActivity(Intent(context, BuilderActivity::class.java)) }
-        }, lp().margins(this, t = 14))
-
         // Categories
         content.addView(text("Browse Products", 17f, Ui.TEXT, bold = true), lp().margins(this, t = 22, b = 10))
         val grid = GridLayout(this).apply { columnCount = 2 }
@@ -164,7 +159,7 @@ class MainActivity : AppCompatActivity() {
         }
         content.addView(grid, lp().margins(this, l = -5, r = -5))
 
-        // My estimates
+        // My quotations
         content.addView(card {
             foreground = ripple()
             addView(horizontal {
@@ -173,7 +168,7 @@ class MainActivity : AppCompatActivity() {
                     addView(icon(R.drawable.ic_history, Ui.BRAND, 24), FrameLayout.LayoutParams(dp(24), dp(24), Gravity.CENTER))
                 }, lp(dp(46), dp(46)))
                 addView(vertical {
-                    addView(text("My Estimates", 15.5f, Ui.TEXT, bold = true))
+                    addView(text("My Quotations", 15.5f, Ui.TEXT, bold = true))
                     addView(text("Open, share or edit saved PDFs", 12f, Ui.MUTED))
                 }, lp(0, WRAP, 1f).margins(context, l = 12))
                 addView(text("›", 26f, Ui.MUTED))
@@ -190,7 +185,7 @@ class MainActivity : AppCompatActivity() {
                     EstimateStore.call(this@MainActivity, s["phone"].ifBlank { "+919288176289" })
                 }, lp(0, WRAP, 1f))
                 addView(pillButton("WhatsApp", 0xFF25D366.toInt(), Color.WHITE, 44) {
-                    EstimateStore.chatAvip(this@MainActivity, "Hello AVIP, I am ${Vendor.contact(this@MainActivity)} from ${Vendor.company(this@MainActivity)}. ")
+                    EstimateStore.chatAvip(this@MainActivity, "Hello AVIP, I am ${Vendor.contact(this@MainActivity)} from ${Vendor.company(this@MainActivity)}. I need help regarding order placement.")
                 }, lp(0, WRAP, 1f).margins(context, l = 10))
             })
         }, lp().margins(this, t = 12, b = 20))

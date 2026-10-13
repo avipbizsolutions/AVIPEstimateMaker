@@ -104,6 +104,15 @@ class SplashActivity : AppCompatActivity() {
             ContextCompat.RECEIVER_NOT_EXPORTED
         )
         Cart.load(this)
+
+        // Tell the user once after an update.
+        val versionCode = Updater.currentVersionCode(this)
+        val lastSeen = prefs.getLong("last_version_code", 0L)
+        if (lastSeen in 1 until versionCode) {
+            Toast.makeText(this, "Updated to version ${Updater.currentVersionName(this)}", Toast.LENGTH_LONG).show()
+        }
+        prefs.edit().putLong("last_version_code", versionCode).apply()
+
         start()
     }
 
@@ -183,7 +192,7 @@ class SplashActivity : AppCompatActivity() {
         if (leaving || isFinishing) return
         if (!Catalog.isLoaded) { start(); return }
         leaving = true
-        val next = if (Vendor.isRegistered(this)) MainActivity::class.java else ProfileActivity::class.java
+        val next = if (Vendor.isComplete(this)) MainActivity::class.java else ProfileActivity::class.java
         startActivity(Intent(this, next))
         @Suppress("DEPRECATION")
         overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)

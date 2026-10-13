@@ -7,7 +7,7 @@ import kotlin.math.abs
 import kotlin.math.floor
 import kotlin.math.round
 
-/** One printed row of an estimate, after the vendor's margin. */
+/** One printed row of a quotation. */
 data class Row(
     val line: Line,
     val rate: Double,
@@ -27,10 +27,9 @@ class Totals(
 
 object Calc {
 
-    /** Margin is added to catalogue items only; the vendor's own lines are taken as entered. */
-    fun compute(lines: List<Line>, marginPct: Double): Totals {
+    fun compute(lines: List<Line>): Totals {
         val rows = lines.map { l ->
-            val rate = if (l.custom) l.price else round2(l.price * (1 + marginPct / 100.0))
+            val rate = l.price
             val amount = round2(rate * l.qty)
             Row(l, rate, amount, round2(amount * l.gst / 100.0))
         }
@@ -46,16 +45,6 @@ object Calc {
     }
 
     fun kwp(lines: List<Line>): Double = round2(lines.sumOf { it.wp * it.qty } / 1000.0)
-
-    /** PM Surya Ghar central subsidy, using the slabs set in the sheet. */
-    fun subsidy(kw: Double, s: AppSettings): Double {
-        if (kw <= 0) return 0.0
-        val first = s.num("subsidy_per_kw_first_2", 30000.0)
-        val third = s.num("subsidy_per_kw_3rd", 18000.0)
-        val max = s.num("subsidy_max", 78000.0)
-        val v = if (kw <= 2) kw * first else 2 * first + minOf(kw - 2, 1.0) * third
-        return round(minOf(v, max))
-    }
 }
 
 object Fmt {

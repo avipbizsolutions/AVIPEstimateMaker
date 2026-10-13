@@ -225,7 +225,7 @@ fun Activity.cartButton(): View = FrameLayout(this).apply {
 }
 
 /**
- * Sticky bottom bar: "3 items · ₹1,23,456  Make Estimate ›". Hidden when the cart is empty.
+ * Sticky bottom bar: "3 items · ₹1,23,456  View Quotation ›". Hidden when the cart is empty.
  * Call [refreshCartBar] when the cart changes.
  */
 fun Activity.cartBar(): View = horizontal {
@@ -236,7 +236,7 @@ fun Activity.cartBar(): View = horizontal {
     val summary = text("", 15f, Color.WHITE, bold = true)
     addView(summary, lp(0, WRAP, 1f).margins(context, l = 12))
     addView(TextView(context).apply {
-        text = "Make Estimate  ›"
+        text = "View Quotation  ›"
         setTextColor(Ui.TEXT)
         typeface = Typeface.DEFAULT_BOLD
         setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
@@ -247,7 +247,7 @@ fun Activity.cartBar(): View = horizontal {
     tag = Runnable {
         val n = Cart.count
         visibility = if (n > 0) View.VISIBLE else View.GONE
-        summary.text = "$n item${if (n == 1) "" else "s"} · ${Fmt.inr(Cart.quickTotal())}"
+        summary.text = "$n item${if (n == 1) "" else "s"} · ${Fmt.inr(Cart.totals().grandTotal)}"
     }
     (tag as Runnable).run()
 }

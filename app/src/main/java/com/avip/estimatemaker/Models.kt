@@ -62,7 +62,7 @@ class AppSettings(private val map: Map<String, String>) {
     }
 }
 
-/** A line in the estimate: a catalogue product or the vendor's own item / charge. */
+/** A line in the quotation: one catalogue product. */
 data class Line(
     val key: String,
     val productId: String?,
@@ -76,8 +76,6 @@ data class Line(
     var minQty: Double,
     val icon: String,
 ) {
-    val custom get() = productId == null
-
     fun toJson(): JSONObject = JSONObject()
         .put("key", key).put("productId", productId ?: JSONObject.NULL)
         .put("name", name).put("spec", spec).put("unit", unit)
@@ -115,30 +113,15 @@ data class Line(
     }
 }
 
-enum class EstimateType { AVIP_QUOTE, CUSTOMER }
-
-/** Everything needed to draw (and later re-open) one estimate. */
+/** Everything needed to draw (and later re-open) one AVIP quotation. */
 data class EstimateDoc(
     val number: String,
     val createdAt: Long,
-    val type: EstimateType,
-    val customerName: String,
-    val customerPhone: String,
-    val customerAddress: String,
-    val marginPct: Double,
-    val showRates: Boolean,
-    val showSubsidy: Boolean,
-    val subsidy: Double,
-    val notes: String,
     val lines: List<Line>,
     val grandTotal: Double,
 ) {
     fun toJson(): JSONObject = JSONObject()
-        .put("number", number).put("createdAt", createdAt).put("type", type.name)
-        .put("customerName", customerName).put("customerPhone", customerPhone)
-        .put("customerAddress", customerAddress).put("marginPct", marginPct)
-        .put("showRates", showRates).put("showSubsidy", showSubsidy).put("subsidy", subsidy)
-        .put("notes", notes).put("grandTotal", grandTotal)
+        .put("number", number).put("createdAt", createdAt).put("grandTotal", grandTotal)
         .put("lines", JSONArray().apply { lines.forEach { put(it.toJson()) } })
 
     companion object {
@@ -147,16 +130,6 @@ data class EstimateDoc(
             return EstimateDoc(
                 number = o.optString("number"),
                 createdAt = o.optLong("createdAt"),
-                type = runCatching { EstimateType.valueOf(o.optString("type")) }
-                    .getOrDefault(EstimateType.AVIP_QUOTE),
-                customerName = o.optString("customerName"),
-                customerPhone = o.optString("customerPhone"),
-                customerAddress = o.optString("customerAddress"),
-                marginPct = o.optDouble("marginPct", 0.0),
-                showRates = o.optBoolean("showRates", true),
-                showSubsidy = o.optBoolean("showSubsidy", false),
-                subsidy = o.optDouble("subsidy", 0.0),
-                notes = o.optString("notes"),
                 lines = (0 until arr.length()).map { Line.fromJson(arr.getJSONObject(it)) },
                 grandTotal = o.optDouble("grandTotal", 0.0),
             )

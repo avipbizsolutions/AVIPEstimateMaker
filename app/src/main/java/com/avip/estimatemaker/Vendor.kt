@@ -1,23 +1,23 @@
 package com.avip.estimatemaker
 
 import android.content.Context
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.os.Build
 import org.json.JSONArray
 import org.json.JSONObject
-import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.UUID
 
-/** The vendor using this phone. Filled once on first launch; editable later. */
+/** The Surya Saathi (partner) using this phone. Filled once on first launch; editable later. */
 object Vendor {
     private const val PREFS = "vendor"
 
     private fun prefs(c: Context) = c.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
     fun isRegistered(c: Context) = prefs(c).getBoolean("registered", false)
+
+    /** Registered with a valid GSTIN (older installs registered without one). */
+    fun isComplete(c: Context) = isRegistered(c) && Gstin.problem(gst(c)) == null
     fun company(c: Context) = prefs(c).getString("company", "") ?: ""
     fun contact(c: Context) = prefs(c).getString("contact", "") ?: ""
     fun mobile(c: Context) = prefs(c).getString("mobile", "") ?: ""
@@ -47,7 +47,7 @@ object Vendor {
             .apply()
         Remote.queue(
             c, JSONObject()
-                .put("kind", "vendor")
+                .put("kind", "saathi")
                 .put("company", company)
                 .put("contact", contact)
                 .put("mobile", mobile)
@@ -58,29 +58,11 @@ object Vendor {
                 .put("appVersion", Updater.currentVersionName(c))
         )
     }
-
-    // ---- vendor's own logo for customer estimates ----
-
-    fun logoFile(c: Context) = File(c.filesDir, "vendor_logo.png")
-
-    fun logo(c: Context): Bitmap? =
-        logoFile(c).takeIf { it.exists() }?.let { BitmapFactory.decodeFile(it.absolutePath) }
-
-    fun saveLogo(c: Context, bmp: Bitmap) {
-        val max = 600
-        val scale = minOf(1f, max.toFloat() / maxOf(bmp.width, bmp.height))
-        val out = if (scale < 1f) Bitmap.createScaledBitmap(
-            bmp, (bmp.width * scale).toInt(), (bmp.height * scale).toInt(), true
-        ) else bmp
-        logoFile(c).outputStream().use { out.compress(Bitmap.CompressFormat.PNG, 100, it) }
-    }
-
-    fun removeLogo(c: Context) { logoFile(c).delete() }
 }
 
 /**
- * Sends vendor sign-ups and estimate summaries to the AVIP sheet through a
- * Google Apps Script web app (URL kept in App Settings → vendor_log_url).
+ * Sends Surya Saathi sign-ups and quotation summaries to the AVIP sheet through a
+ * Google Apps Script web app (URL kept in App Settings → saathi_log_url).
  * Anything that can't be sent now waits on the phone and is retried later.
  */
 object Remote {
@@ -105,7 +87,7 @@ object Remote {
 
     fun flushAsync(context: Context) {
         val c = context.applicationContext
-        val endpoint = Catalog.settings["vendor_log_url"]
+        val endpoint = Catalog.settings["saathi_log_url"].ifBlank { Catalog.settings["vendor_log_url"] }
         if (endpoint.isBlank() || !endpoint.startsWith("https://") || sending) return
         sending = true
         Thread {

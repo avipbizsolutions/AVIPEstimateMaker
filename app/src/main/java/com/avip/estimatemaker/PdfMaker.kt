@@ -15,10 +15,8 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * Draws an estimate as an A4 PDF.
- * AVIP quotation: AVIP letterhead, vendor as "Quotation to", bank details and terms.
- * Customer estimate: vendor's own letterhead/logo, customer as "Estimate for",
- * vendor margin built into rates, optional PM Surya Ghar subsidy.
+ * Draws an AVIP quotation as an A4 PDF: AVIP letterhead, the Surya Saathi as
+ * "Quotation to", item table with GST, bank details, godown and terms.
  */
 class PdfMaker(private val context: Context) {
 
@@ -51,17 +49,15 @@ class PdfMaker(private val context: Context) {
 
     fun make(est: EstimateDoc, out: File) {
         val s = Catalog.settings
-        val isAvip = est.type == EstimateType.AVIP_QUOTE
-        val totals = Calc.compute(est.lines, if (isAvip) 0.0 else est.marginPct)
+        val totals = Calc.compute(est.lines)
         val date = SimpleDateFormat("dd MMM yyyy", Locale.ENGLISH).format(Date(est.createdAt))
-        footerText = if (isAvip) "${s["company_name"].ifBlank { "AVIP Business Solutions LLP" }}  ·  ${s["phone"]}  ·  ${s["website"]}"
-        else Vendor.company(context)
+        footerText = "${s["company_name"].ifBlank { "AVIP Business Solutions LLP" }}  ·  ${s["phone"]}  ·  ${s["website"]}"
 
         doc = PdfDocument()
         newPage()
 
         // ---------- Letterhead ----------
-        val logo: Bitmap? = if (isAvip) drawableBitmap(R.drawable.ic_logo, 160) else Vendor.logo(context)
+        val logo: Bitmap? = drawableBitmap(R.drawable.ic_logo, 160)
         var textLeft = margin
         val headTop = y
         if (logo != null) {
@@ -73,53 +69,35 @@ class PdfMaker(private val context: Context) {
         val titleW = 170f
         val headWidth = right - titleW - textLeft
         var hy = headTop + 16f
-        if (isAvip) {
-            hy = drawWrapped(s["company_name"].ifBlank { "AVIP Business Solutions LLP" }, textLeft, hy, headWidth, paint(16f, brand, true), 19f)
-            if (s["tagline"].isNotBlank()) hy = drawWrapped(s["tagline"], textLeft, hy, headWidth, paint(8.5f, muted), 11f)
-            hy = drawWrapped(s["address"], textLeft, hy, headWidth, paint(8.5f, ink), 11f)
-            hy = drawWrapped(listOf(s["phone"], s["email"], s["website"]).filter { it.isNotBlank() }.joinToString("  ·  "), textLeft, hy, headWidth, paint(8.5f, ink), 11f)
-            if (s["gstin"].isNotBlank()) hy = drawWrapped("GSTIN: ${s["gstin"]}", textLeft, hy, headWidth, paint(8.5f, ink, true), 11f)
-        } else {
-            hy = drawWrapped(Vendor.company(context), textLeft, hy, headWidth, paint(16f, brand, true), 19f)
-            if (Vendor.address(context).isNotBlank()) hy = drawWrapped(Vendor.address(context), textLeft, hy, headWidth, paint(8.5f, ink), 11f)
-            val contact = listOf(Vendor.contact(context), "Mob: " + Vendor.mobile(context), Vendor.city(context)).filter { it.isNotBlank() }
-            hy = drawWrapped(contact.joinToString("  ·  "), textLeft, hy, headWidth, paint(8.5f, ink), 11f)
-            if (Vendor.gst(context).isNotBlank()) hy = drawWrapped("GSTIN: ${Vendor.gst(context)}", textLeft, hy, headWidth, paint(8.5f, ink, true), 11f)
-        }
+        hy = drawWrapped(s["company_name"].ifBlank { "AVIP Business Solutions LLP" }, textLeft, hy, headWidth, paint(16f, brand, true), 19f)
+        if (s["tagline"].isNotBlank()) hy = drawWrapped(s["tagline"], textLeft, hy, headWidth, paint(8.5f, muted), 11f)
+        hy = drawWrapped(s["address"], textLeft, hy, headWidth, paint(8.5f, ink), 11f)
+        hy = drawWrapped(listOf(s["phone"], s["email"], s["website"]).filter { it.isNotBlank() }.joinToString("  ·  "), textLeft, hy, headWidth, paint(8.5f, ink), 11f)
+        if (s["gstin"].isNotBlank()) hy = drawWrapped("GSTIN: ${s["gstin"]}", textLeft, hy, headWidth, paint(8.5f, ink, true), 11f)
 
         // Title block on the right
-        val title = if (isAvip) "QUOTATION" else "ESTIMATE"
+        val title = "QUOTATION"
         val tb = RectF(right - titleW, headTop, right, headTop + 62f)
         canvas.drawRoundRect(tb, 8f, 8f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = brand })
         canvas.drawText(title, tb.centerX(), tb.top + 21f, paint(15f, Color.WHITE, true, Paint.Align.CENTER))
         canvas.drawText("No: ${est.number}", tb.centerX(), tb.top + 37f, paint(8.5f, Color.WHITE, align = Paint.Align.CENTER))
         canvas.drawText("Date: $date", tb.centerX(), tb.top + 50f, paint(8.5f, Color.WHITE, align = Paint.Align.CENTER))
-        if (isAvip) {
-            val days = s.num("quote_validity_days", 7.0).toInt()
-            val till = SimpleDateFormat("dd MMM yyyy", Locale.ENGLISH).format(Date(est.createdAt + days * 86_400_000L))
-            canvas.drawText("Valid till: $till", tb.centerX(), tb.bottom + 12f, paint(8f, muted, align = Paint.Align.CENTER))
-        }
+        val days = s.num("quote_validity_days", 7.0).toInt()
+        val till = SimpleDateFormat("dd MMM yyyy", Locale.ENGLISH).format(Date(est.createdAt + days * 86_400_000L))
+        canvas.drawText("Valid till: $till", tb.centerX(), tb.bottom + 12f, paint(8f, muted, align = Paint.Align.CENTER))
 
         y = maxOf(hy, headTop + 76f) + 6f
         canvas.drawRect(margin, y, right, y + 3f, Paint().apply { color = sun })
         y += 14f
 
         // ---------- To / For ----------
+        val toTitle = "Quotation to  ·  Surya Saathi"
         val toLines = mutableListOf<String>()
-        val toTitle: String
-        if (isAvip) {
-            toTitle = "Quotation to"
-            toLines += Vendor.company(context)
-            toLines += listOf(Vendor.contact(context), "Mob: " + Vendor.mobile(context)).filter { it.isNotBlank() }.joinToString("  ·  ")
-            val place = listOf(Vendor.address(context), Vendor.city(context)).filter { it.isNotBlank() }.joinToString(", ")
-            if (place.isNotBlank()) toLines += place
-            if (Vendor.gst(context).isNotBlank()) toLines += "GSTIN: ${Vendor.gst(context)}"
-        } else {
-            toTitle = "Estimate for"
-            toLines += est.customerName.ifBlank { "Customer" }
-            if (est.customerPhone.isNotBlank()) toLines += "Mob: ${est.customerPhone}"
-            if (est.customerAddress.isNotBlank()) toLines += est.customerAddress
-        }
+        toLines += Vendor.company(context)
+        toLines += listOf(Vendor.contact(context), "Mob: " + Vendor.mobile(context)).filter { it.isNotBlank() }.joinToString("  ·  ")
+        val place = listOf(Vendor.address(context), Vendor.city(context)).filter { it.isNotBlank() }.joinToString(", ")
+        if (place.isNotBlank()) toLines += place
+        if (Vendor.gst(context).isNotBlank()) toLines += "GSTIN: ${Vendor.gst(context)}"
         val boxTop = y
         val half = (right - margin - 12f) / 2f
         var ly = boxTop + 14f
@@ -147,18 +125,14 @@ class PdfMaker(private val context: Context) {
         y = boxBottom + 14f
 
         // ---------- Items table ----------
-        val cols = if (est.showRates || isAvip) listOf(
+        val cols = listOf(
             Col("#", 22f, Paint.Align.CENTER), Col("Item", 0f, Paint.Align.LEFT),
             Col("Qty", 46f, Paint.Align.RIGHT), Col("Rate", 70f, Paint.Align.RIGHT),
             Col("GST", 34f, Paint.Align.RIGHT), Col("Amount", 80f, Paint.Align.RIGHT),
-        ) else listOf(
-            Col("#", 22f, Paint.Align.CENTER), Col("Item", 0f, Paint.Align.LEFT),
-            Col("Qty", 70f, Paint.Align.RIGHT), Col("Unit", 70f, Paint.Align.RIGHT),
         )
         val fixed = cols.sumOf { it.w.toDouble() }.toFloat()
         val itemW = right - margin - fixed
         val widths = cols.map { if (it.w == 0f) itemW else it.w }
-        val showRates = cols.size == 6
 
         fun header() {
             canvas.drawRect(margin, y, right, y + 20f, Paint().apply { color = brand })
@@ -176,7 +150,7 @@ class PdfMaker(private val context: Context) {
         val subPaint = paint(7.5f, muted)
         totals.rows.forEachIndexed { idx, r ->
             val l = r.line
-            val sub = listOf(l.spec, if (showRates) "per ${l.unit.lowercase()}" else "").filter { it.isNotBlank() }.joinToString(" · ")
+            val sub = listOf(l.spec, "per ${l.unit.lowercase()}").filter { it.isNotBlank() }.joinToString(" · ")
             val nameLines = wrap(l.name, itemW - 12f, namePaint)
             val subLines = if (sub.isBlank()) emptyList() else wrap(sub, itemW - 12f, subPaint)
             val rowH = 8f + nameLines.size * 11f + subLines.size * 9.5f + 4f
@@ -195,7 +169,6 @@ class PdfMaker(private val context: Context) {
                         subLines.forEach { canvas.drawText(it, tx, iy - 1f, subPaint); iy += 9.5f }
                     }
                     "Qty" -> canvas.drawText(Fmt.qty(l.qty), tx, base, paint(8.5f, ink, align = c.align))
-                    "Unit" -> canvas.drawText(l.unit, tx, base, paint(8.5f, ink, align = c.align))
                     "Rate" -> canvas.drawText(Fmt.inr(r.rate, true), tx, base, paint(8.5f, ink, align = c.align))
                     "GST" -> canvas.drawText("${Fmt.num(l.gst)}%", tx, base, paint(8.5f, ink, align = c.align))
                     "Amount" -> canvas.drawText(Fmt.inr(r.amount, true), tx, base, paint(8.8f, ink, true, c.align))
@@ -211,8 +184,7 @@ class PdfMaker(private val context: Context) {
         totalRows += Triple("Sub Total (before GST)", Fmt.inr(totals.subTotal, true), false)
         totals.gstByRate.forEach { (rate, amt) -> totalRows += Triple("GST @ ${Fmt.num(rate)}%", Fmt.inr(amt, true), false) }
         if (totals.roundOff != 0.0) totalRows += Triple("Round off", Fmt.inr(totals.roundOff, true), false)
-        val subsidy = if (!isAvip && est.showSubsidy) est.subsidy else 0.0
-        val needed = 30f + totalRows.size * 15f + 26f + (if (subsidy > 0) 50f else 0f) + 20f
+        val needed = 30f + totalRows.size * 15f + 26f + 20f
         if (y + needed > pageH - 70f) newPage()
         y += 10f
         val tx1 = right - 230f
@@ -230,39 +202,23 @@ class PdfMaker(private val context: Context) {
         drawWrapped(Fmt.words(totals.grandTotal), margin, gt.top + 12f, tx1 - margin - 20f, paint(8f, muted), 10f)
         y += 6f
 
-        if (subsidy > 0) {
-            val sb = RectF(margin, y, right, y + 44f)
-            canvas.drawRoundRect(sb, 6f, 6f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFFFF4E0.toInt() })
-            canvas.drawText("Less: Expected PM Surya Ghar central subsidy", margin + 10f, y + 16f, paint(9f, ink, true))
-            canvas.drawText("- ${Fmt.inr(subsidy)}", right - 10f, y + 16f, paint(9.5f, ink, true, Paint.Align.RIGHT))
-            canvas.drawText("Net effective cost to customer", margin + 10f, y + 34f, paint(9.5f, brand, true))
-            canvas.drawText(Fmt.inr(totals.grandTotal - subsidy), right - 10f, y + 34f, paint(11f, brand, true, Paint.Align.RIGHT))
-            y += 50f
-            y = drawWrapped("Subsidy is credited by the government to the customer's bank account after installation and inspection; the full amount above is payable to the vendor.", margin, y + 4f, right - margin, paint(7.5f, muted), 9.5f)
-        }
-
         // ---------- Footer blocks ----------
         y += 10f
-        if (isAvip) {
-            val bank = listOf(
-                "A/c Name: ${s["bank_account_name"]}",
-                "A/c No: ${s["bank_account_no"]}   ·   IFSC: ${s["bank_ifsc"]}",
-                "Bank: ${s["bank_branch"]}",
-            )
-            section("Bank details", bank)
-            if (s["address"].isNotBlank()) section("Pickup / Godown", listOfNotNull(s["address"], s["map_link"].takeIf { it.isNotBlank() }))
-            val terms = s.terms()
-            if (terms.isNotEmpty()) section("Terms & conditions", terms.mapIndexed { i, t -> "${i + 1}. $t" })
-            if (s["price_note"].isNotBlank()) section("Note", listOf(s["price_note"] + (if (s["price_last_updated"].isNotBlank()) " Price list dated ${s["price_last_updated"]}." else "")))
-        } else {
-            val notes = est.notes.lines().map { it.trim() }.filter { it.isNotBlank() }
-            if (notes.isNotEmpty()) section("Terms & notes", notes)
-        }
+        val bank = listOf(
+            "A/c Name: ${s["bank_account_name"]}",
+            "A/c No: ${s["bank_account_no"]}   ·   IFSC: ${s["bank_ifsc"]}",
+            "Bank: ${s["bank_branch"]}",
+        )
+        section("Bank details", bank)
+        if (s["address"].isNotBlank()) section("Pickup / Godown", listOfNotNull(s["address"], s["map_link"].takeIf { it.isNotBlank() }))
+        val terms = s.terms()
+        if (terms.isNotEmpty()) section("Terms & conditions", terms.mapIndexed { i, t -> "${i + 1}. $t" })
+        if (s["price_note"].isNotBlank()) section("Note", listOf(s["price_note"] + (if (s["price_last_updated"].isNotBlank()) " Price list dated ${s["price_last_updated"]}." else "")))
 
         // signature
         if (y + 50f > pageH - 60f) newPage()
         y += 16f
-        val signer = if (isAvip) "For ${s["company_name"].ifBlank { "AVIP Business Solutions LLP" }}" else "For ${Vendor.company(context)}"
+        val signer = "For ${s["company_name"].ifBlank { "AVIP Business Solutions LLP" }}"
         canvas.drawText(signer, right, y, paint(9f, ink, true, Paint.Align.RIGHT))
         canvas.drawText("Authorised Signatory", right, y + 34f, paint(8f, muted, align = Paint.Align.RIGHT))
 

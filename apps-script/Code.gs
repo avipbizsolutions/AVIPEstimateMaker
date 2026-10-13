@@ -1,12 +1,12 @@
 /**
- * AVIP Estimate Maker – receives vendor sign-ups and estimate summaries from the app.
+ * AVIP Estimate Maker – receives Surya Saathi sign-ups and quotation summaries from the app.
  *
  * Setup (one time):
  * 1. Open the price sheet > Extensions > Apps Script, paste this file, Save.
  * 2. Deploy > New deployment > type "Web app"
  *      Execute as: Me    Who has access: Anyone
  * 3. Copy the web app URL (ends in /exec) into the sheet's "App Settings" tab,
- *    key "vendor_log_url". The app picks it up on its next launch — no rebuild needed.
+ *    key "saathi_log_url". The app picks it up on its next launch — no rebuild needed.
  */
 const SHEET_ID = '1TEhXDY6fUY93h63IZzhWFwxA0pXwFkNflybA9hO9DVc';
 const SHARED_KEY = 'avip-estimate-9Fk2'; // must match Remote.kt
@@ -19,8 +19,8 @@ function doPost(e) {
     lock.waitLock(10000);
     const book = SpreadsheetApp.openById(SHEET_ID);
 
-    if (d.kind === 'vendor') {
-      const sheet = book.getSheetByName('Vendors');
+    if (d.kind === 'saathi' || d.kind === 'vendor') {
+      const sheet = book.getSheetByName('Surya Saathi');
       const row = [
         new Date(), clean(d.company), clean(d.contact), clean(d.mobile),
         clean(d.gst), clean(d.city), clean(d.installId), clean(d.appVersion),
@@ -32,10 +32,10 @@ function doPost(e) {
       if (i >= 0) sheet.getRange(i + 2, 1, 1, row.length).setValues([row]);
       else sheet.appendRow(row);
     } else if (d.kind === 'estimate') {
-      book.getSheetByName('Estimates Log').appendRow([
-        new Date(), clean(d.number), clean(d.type), clean(d.company), clean(d.mobile),
-        clean(d.customer), clean(d.items, 2000),
-        Number(d.subTotal) || 0, Number(d.gst) || 0, Number(d.grandTotal) || 0,
+      book.getSheetByName('Quotations Log').appendRow([
+        new Date(), clean(d.number), clean(d.company), clean(d.contact), clean(d.mobile),
+        clean(d.gst), clean(d.items, 2000),
+        Number(d.subTotal) || 0, Number(d.gstAmount) || 0, Number(d.grandTotal) || 0,
       ]);
     } else {
       return reply({ ok: false, error: 'unknown kind' });

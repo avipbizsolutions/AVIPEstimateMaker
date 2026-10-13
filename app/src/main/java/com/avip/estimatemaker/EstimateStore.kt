@@ -13,7 +13,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-/** Saved estimates (JSON + PDF) in the app's private storage. */
+/** Saved quotations (JSON + PDF) in the app's private storage. */
 object EstimateStore {
 
     private fun dir(c: Context) = File(c.filesDir, "estimates").apply { mkdirs() }
@@ -23,12 +23,11 @@ object EstimateStore {
     fun pdfFile(c: Context, number: String) = File(dir(c), safe(number) + ".pdf")
     private fun jsonFile(c: Context, number: String) = File(dir(c), safe(number) + ".json")
 
-    /** e.g. AQ-261014-03 (AVIP quote) or CE-261014-01 (customer estimate). */
-    fun nextNumber(c: Context, type: EstimateType): String {
+    /** e.g. AQ-261014-03 */
+    fun nextNumber(c: Context): String {
         val p = c.getSharedPreferences("numbers", Context.MODE_PRIVATE)
         val day = SimpleDateFormat("yyMMdd", Locale.ENGLISH).format(Date())
-        val prefix = if (type == EstimateType.AVIP_QUOTE) "AQ" else "CE"
-        val key = "$prefix-$day"
+        val key = "AQ-$day"
         val n = p.getInt(key, 0) + 1
         p.edit().putInt(key, n).apply()
         return "$key-${n.toString().padStart(2, '0')}"
@@ -71,7 +70,7 @@ object EstimateStore {
             .putExtra(Intent.EXTRA_STREAM, uri(a, file))
             .putExtra(Intent.EXTRA_TEXT, message)
             .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        a.startActivity(Intent.createChooser(i, "Share estimate"))
+        a.startActivity(Intent.createChooser(i, "Share quotation"))
     }
 
     /** Sends the PDF straight to a WhatsApp chat (falls back to the share sheet). */
