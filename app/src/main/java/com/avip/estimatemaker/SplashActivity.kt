@@ -77,8 +77,8 @@ class SplashActivity : AppCompatActivity() {
         val brandBlock = vertical {
             gravity = Gravity.CENTER_HORIZONTAL
             addView(ImageView(context).apply { setImageResource(R.drawable.ic_logo) }, lp(dp(120), dp(120)))
-            addView(text("AVIP Estimate Maker", 26f, Color.WHITE, bold = true) { gravity = Gravity.CENTER }, lp(WRAP, WRAP).margins(context, t = 18))
-            addView(text("Solar product estimates in seconds", 14f, 0xDDFFFFFF.toInt()) { gravity = Gravity.CENTER }, lp(WRAP, WRAP).margins(context, t = 6))
+            addView(text("AVIP Surya Saathi", 26f, Color.WHITE, bold = true) { gravity = Gravity.CENTER }, lp(WRAP, WRAP).margins(context, t = 18))
+            addView(text("B2B solar prices & quotations in seconds", 14f, 0xDDFFFFFF.toInt()) { gravity = Gravity.CENTER }, lp(WRAP, WRAP).margins(context, t = 6))
             addView(text("by AVIP Business Solutions LLP", 12f, Ui.SUN, bold = true) { gravity = Gravity.CENTER }, lp(WRAP, WRAP).margins(context, t = 4))
         }
         root.addView(brandBlock)
@@ -174,7 +174,7 @@ class SplashActivity : AppCompatActivity() {
     private fun askInstallPermission(release: ReleaseInfo) {
         AlertDialog.Builder(this)
             .setTitle("New version available")
-            .setMessage("Version ${release.versionName} is ready. Allow AVIP Estimate Maker to install its own updates? This is needed only once.")
+            .setMessage("Version ${release.versionName} is ready. Allow AVIP Surya Saathi to install its own updates? This is needed only once.")
             .setCancelable(false)
             .setPositiveButton("Allow") { _, _ ->
                 unknownSourcesLauncher.launch(

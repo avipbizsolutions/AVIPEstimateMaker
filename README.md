@@ -1,10 +1,10 @@
-# AVIP Estimate Maker
+# AVIP Surya Saathi
 
 Free Android app for **Surya Saathi** partners (PM Surya Ghar installers and solar businesses)
 to see AVIP Business Solutions LLP's B2B prices and create AVIP quotation PDFs in seconds.
 
 **Download the latest APK:**
-https://github.com/avipbizsolutions/AVIPEstimateMaker/releases/latest/download/AVIP-Estimate-Maker.apk
+https://github.com/avipbizsolutions/AVIPEstimateMaker/releases/latest/download/AVIP-Surya-Saathi.apk
 
 ## What a Surya Saathi can do
 - Register once: company, contact person, mobile and **GSTIN (mandatory)**. The GSTIN is checked
@@ -20,8 +20,10 @@ Everything comes from the Google Sheet (must stay *Anyone with the link → View
 
 | Tab | Purpose |
 |---|---|
-| **App Prices** | One product per row. Edit rates, add rows, set *In Stock* = No to hide a price. *Rate Basis* = "Per Wp" for panels (rate × Wp = price per panel). |
-| **App Settings** | Company details, bank, terms, validity, WhatsApp number, home-screen announcement. |
+| **Worksheet** | The price list your team edits. Everything in the app comes from here. |
+| **App Prices** | Auto-filled from the Worksheet by a formula — do not type in it. The note on cell A1 lists the Worksheet rules (category headings with GST, Wp in the Brand column for panels, "Pellet Pricing" and "Per pc" rows). |
+| **Product Photos** | Keywords → photo link. Paste Google Drive share links or any image link; blank = category icon. |
+| **App Settings** | Company details, bank, terms, validity, WhatsApp number, Grievance Officers, home-screen announcement. |
 | **Surya Saathi** | Filled automatically when partners register (needs the Apps Script below). |
 | **Quotations Log** | One row per PDF created (needs the Apps Script below). |
 

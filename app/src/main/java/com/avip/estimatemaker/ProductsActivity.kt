@@ -137,7 +137,7 @@ fun productCard(a: Activity, p: Product, onChange: () -> Unit): View = with(a) {
     card(12) {
         addView(horizontal {
             gravity = Gravity.TOP
-            addView(iconBadge(p.icon, 44, square = true))
+            addView(productPhoto(p, p.icon, 76))
             addView(vertical {
                 if (p.brand.isNotBlank()) addView(text(p.brand.uppercase(), 10.5f, Ui.categoryColor(p.icon), bold = true) {
                     letterSpacing = 0.06f

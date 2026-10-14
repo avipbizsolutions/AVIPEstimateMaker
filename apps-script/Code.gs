@@ -1,5 +1,5 @@
 /**
- * AVIP Estimate Maker – receives Surya Saathi sign-ups and quotation summaries from the app.
+ * AVIP Surya Saathi app – receives Surya Saathi sign-ups and quotation summaries from the app.
  *
  * Setup (one time):
  * 1. Open the price sheet > Extensions > Apps Script, paste this file, Save.

@@ -253,3 +253,81 @@ fun Activity.cartBar(): View = horizontal {
 }
 
 fun View.refreshTag() { (tag as? Runnable)?.run() }
+
+/**
+ * Product photo (from the "Product Photos" sheet tab) in a rounded tile. Shows the
+ * category icon until the photo arrives, or if there is no photo. Tap to enlarge.
+ */
+fun Activity.productPhoto(p: Product?, icon: String, sizeDp: Int): View {
+    val frame = FrameLayout(this)
+    frame.layoutParams = LinearLayout.LayoutParams(dp(sizeDp), dp(sizeDp))
+    frame.addView(iconBadge(icon, sizeDp, square = true), FrameLayout.LayoutParams(MATCH, MATCH))
+    val url = p?.let { Catalog.photoFor(it) } ?: ""
+    if (url.isBlank()) return frame
+    val img = ImageView(this).apply {
+        scaleType = ImageView.ScaleType.FIT_CENTER
+        background = rounded(Color.WHITE, dpf(14f), Ui.LINE, dp(1))
+        setPadding(dp(3), dp(3), dp(3), dp(3))
+        clipToOutline = true
+        visibility = View.GONE
+    }
+    frame.addView(img, FrameLayout.LayoutParams(MATCH, MATCH))
+    fun show(b: android.graphics.Bitmap) {
+        img.setImageBitmap(b)
+        img.visibility = View.VISIBLE
+        frame.getChildAt(0).visibility = View.INVISIBLE
+        frame.setOnClickListener { showPhoto(this, b, p!!.title) }
+    }
+    val cached = ImageLoader.cached(url)
+    if (cached != null) show(cached) else ImageLoader.load(this, url, 400) { b -> show(b) }
+    return frame
+}
+
+/** Full-width photo dialog. */
+fun showPhoto(a: Activity, bitmap: android.graphics.Bitmap, title: String) {
+    val iv = ImageView(a).apply {
+        setImageBitmap(bitmap)
+        adjustViewBounds = true
+        scaleType = ImageView.ScaleType.FIT_CENTER
+        setBackgroundColor(Color.WHITE)
+        setPadding(a.dp(12), a.dp(12), a.dp(12), a.dp(4))
+    }
+    val box = a.vertical {
+        addView(iv, lp(MATCH, WRAP))
+        addView(a.text("Representative image", 11f, Ui.MUTED) { gravity = Gravity.CENTER }, lp().margins(a, b = 8))
+    }
+    androidx.appcompat.app.AlertDialog.Builder(a)
+        .setTitle(title)
+        .setView(box)
+        .setPositiveButton("Close", null)
+        .show()
+}
+
+/** Grievance Officer contacts from App Settings ("Rahul: 9288076289 / Atul: 7739876289"). */
+fun grievanceOfficers(): List<Pair<String, String>> {
+    val raw = Catalog.settings["grievance_officers"].ifBlank { "Rahul: 9288076289 / Atul: 7739876289" }
+    return raw.split('/', ',', ';').mapNotNull { part ->
+        val name = part.substringBefore(':').trim()
+        val number = part.substringAfter(':', "").filter { it.isDigit() || it == '+' }
+        if (name.isBlank() || number.length < 10) null else name to number
+    }
+}
+
+/** Card listing the Grievance Officers with tap-to-call buttons. */
+fun Activity.grievanceCard(): View = card {
+    addView(text("Grievance Officer", 15f, Ui.TEXT, bold = true))
+    addView(text("For any complaint or concern, contact:", 12.5f, Ui.MUTED), lp().margins(context, t = 2, b = 8))
+    grievanceOfficers().forEach { (name, number) ->
+        addView(horizontal {
+            addView(icon(R.drawable.ic_person, Ui.BRAND, 20))
+            addView(text(name, 14.5f, Ui.TEXT, bold = true), lp(0, WRAP, 1f).margins(context, l = 10))
+            addView(horizontal {
+                background = rounded(0xFFE8F3EC.toInt(), dpf(16f))
+                setPadding(dp(12), dp(7), dp(14), dp(7))
+                addView(icon(R.drawable.ic_call, Ui.BRAND, 16))
+                addView(text(number, 14f, Ui.BRAND_DARK, bold = true), lp(WRAP, WRAP).margins(context, l = 6))
+                setOnClickListener { EstimateStore.call(this@grievanceCard, number) }
+            })
+        }, lp().margins(context, t = 6))
+    }
+}

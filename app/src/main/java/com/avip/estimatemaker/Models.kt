@@ -101,7 +101,7 @@ data class Line(
             key = p.id,
             productId = p.id,
             name = p.title,
-            spec = p.spec,
+            spec = listOf(p.category, p.spec).filter { it.isNotBlank() }.joinToString(" · "),
             unit = p.unit,
             price = p.unitPrice ?: 0.0,
             gst = p.gst,

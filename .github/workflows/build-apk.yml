@@ -32,8 +32,10 @@ jobs:
         run: |
           set -o pipefail
           gradle assembleRelease --console=plain 2>&1 | tee build.log
-          cp app/build/outputs/apk/release/app-release.apk "AVIP-Estimate-Maker-${VERSION_NAME}.apk"
-          # Fixed name, so .../releases/latest/download/AVIP-Estimate-Maker.apk always gets the newest
+          cp app/build/outputs/apk/release/app-release.apk "AVIP-Surya-Saathi-${VERSION_NAME}.apk"
+          # Fixed name, so .../releases/latest/download/AVIP-Surya-Saathi.apk always gets the newest
+          cp app/build/outputs/apk/release/app-release.apk AVIP-Surya-Saathi.apk
+          # Old download link from before the rename keeps working
           cp app/build/outputs/apk/release/app-release.apk AVIP-Estimate-Maker.apk
 
       - name: Report build errors
@@ -45,8 +47,8 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: AVIP-Estimate-Maker-${{ env.VERSION_NAME }}-apk
-          path: AVIP-Estimate-Maker-${{ env.VERSION_NAME }}.apk
+          name: AVIP-Surya-Saathi-${{ env.VERSION_NAME }}-apk
+          path: AVIP-Surya-Saathi-${{ env.VERSION_NAME }}.apk
 
       # Phones check this release on launch and update themselves.
       - name: Publish release
@@ -54,9 +56,10 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ env.VERSION_NAME }}
-          name: AVIP Estimate Maker ${{ env.VERSION_NAME }}
+          name: AVIP Surya Saathi ${{ env.VERSION_NAME }}
           body: Automatic build from commit ${{ github.sha }}.
           files: |
-            AVIP-Estimate-Maker-${{ env.VERSION_NAME }}.apk
+            AVIP-Surya-Saathi-${{ env.VERSION_NAME }}.apk
+            AVIP-Surya-Saathi.apk
             AVIP-Estimate-Maker.apk
           make_latest: true

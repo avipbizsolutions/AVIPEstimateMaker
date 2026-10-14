@@ -34,7 +34,7 @@ class UpdatedReceiver : BroadcastReceiver() {
         )
         val notification = NotificationCompat.Builder(context, CHANNEL)
             .setSmallIcon(R.drawable.ic_stat_update)
-            .setContentTitle("AVIP Estimate Maker updated")
+            .setContentTitle("AVIP Surya Saathi updated")
             .setContentText("Now on version ${Updater.currentVersionName(context)}. Tap to open.")
             .setContentIntent(open)
             .setAutoCancel(true)

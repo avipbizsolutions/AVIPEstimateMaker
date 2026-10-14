@@ -79,9 +79,10 @@ class ProfileActivity : AppCompatActivity() {
 
         form.addView(pillButton(if (firstRun) "Register as Surya Saathi  ›" else "Save", Ui.BRAND) { save() },
             lp().margins(this, t = 18, b = 8))
-        form.addView(text("Your details are shared with AVIP Business Solutions LLP so our team can assist you.", 11.5f, Ui.MUTED) {
+        form.addView(text("Your details are kept confidential with AVIP Business Solutions LLP.", 12f, Ui.MUTED) {
             gravity = Gravity.CENTER
-        }, lp().margins(this, b = 20))
+        }, lp().margins(this, b = 16))
+        form.addView(grievanceCard(), lp().margins(this, b = 20))
 
         setContentView(root)
         showGstStatus()

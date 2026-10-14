@@ -41,7 +41,7 @@ class MainActivity : AppCompatActivity() {
             setPadding(dp(10), dp(10), dp(10), dp(10))
             setOnClickListener { startActivity(Intent(this@MainActivity, ProfileActivity::class.java)) }
         }
-        root.addView(topBar("AVIP Estimate Maker", "B2B Solar Price List for Surya Saathi", showBack = false,
+        root.addView(topBar("AVIP Surya Saathi", "B2B Solar Price List", showBack = false,
             right = listOf(refreshBtn, profileBtn, cartIcon)))
 
         content = vertical(14)
@@ -188,6 +188,8 @@ class MainActivity : AppCompatActivity() {
                     EstimateStore.chatAvip(this@MainActivity, "Hello AVIP, I am ${Vendor.contact(this@MainActivity)} from ${Vendor.company(this@MainActivity)}. I need help regarding order placement.")
                 }, lp(0, WRAP, 1f).margins(context, l = 10))
             })
-        }, lp().margins(this, t = 12, b = 20))
+        }, lp().margins(this, t = 12))
+
+        content.addView(grievanceCard(), lp().margins(this, t = 12, b = 20))
     }
 }

@@ -71,6 +71,10 @@ object Cart {
     fun reprice(context: Context) {
         load(context)
         var any = false
+        // Items no longer priced in the Worksheet (renamed, removed or rate cleared) are dropped.
+        if (Catalog.isLive && Catalog.isLoaded) {
+            any = lines.removeAll { l -> Catalog.byId(l.productId)?.available != true }
+        }
         lines.forEach { l ->
             val p = Catalog.byId(l.productId) ?: return@forEach
             val price = p.unitPrice ?: return@forEach

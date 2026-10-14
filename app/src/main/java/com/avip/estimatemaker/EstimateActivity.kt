@@ -96,7 +96,7 @@ class EstimateActivity : AppCompatActivity() {
         return card(12) {
             addView(horizontal {
                 gravity = Gravity.TOP
-                addView(iconBadge(l.icon, 38, square = true))
+                addView(productPhoto(Catalog.byId(l.productId), l.icon, 48))
                 addView(vertical {
                     addView(text(l.name, 14.5f, Ui.TEXT, bold = true))
                     val sub = listOf(l.spec, "${Fmt.inr(r.rate, r.rate < 100)} / ${l.unit.lowercase()}", "GST ${Fmt.num(l.gst)}%")

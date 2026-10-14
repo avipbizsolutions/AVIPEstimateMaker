@@ -18,6 +18,11 @@ object Catalog {
     private const val SHEET_ID = "1TEhXDY6fUY93h63IZzhWFwxA0pXwFkNflybA9hO9DVc"
     private const val PRICES_TAB = "App Prices"
     private const val SETTINGS_TAB = "App Settings"
+    private const val PHOTOS_TAB = "Product Photos"
+
+    /** One row of the "Product Photos" tab: all [words] must appear in a product. */
+    private class PhotoRule(val words: List<String>, val url: String)
+    @Volatile private var photoRules: List<PhotoRule> = emptyList()
 
     @Volatile var products: List<Product> = emptyList()
         private set
@@ -36,6 +41,7 @@ object Catalog {
 
     private fun pricesFile(c: Context) = File(c.filesDir, "prices.csv")
     private fun settingsFile(c: Context) = File(c.filesDir, "settings.csv")
+    private fun photosFile(c: Context) = File(c.filesDir, "photos.csv")
 
     /** Loads the copy saved on the phone. Returns false if there is none. */
     fun loadCached(context: Context): Boolean {
@@ -46,6 +52,7 @@ object Catalog {
             apply(p.readText(), if (s.exists()) s.readText() else "")
             updatedAt = p.lastModified()
             isLive = false
+            photosFile(context).takeIf { it.exists() }?.let { photoRules = parsePhotos(it.readText()) }
             true
         } catch (_: Exception) {
             false
@@ -60,6 +67,12 @@ object Catalog {
             apply(prices, sets) // throws if the data is unusable, keeping the old copy
             pricesFile(context).writeText(prices)
             settingsFile(context).writeText(sets)
+            try {
+                val photos = download(url(PHOTOS_TAB))
+                photoRules = parsePhotos(photos)
+                photosFile(context).writeText(photos)
+            } catch (_: Exception) {
+            }
             updatedAt = System.currentTimeMillis()
             isLive = true
             Cart.reprice(context)
@@ -90,6 +103,26 @@ object Catalog {
     }
 
     fun byId(id: String?): Product? = products.firstOrNull { it.id == id }
+
+    private fun tokens(text: String): Set<String> =
+        text.lowercase().split(Regex("[^a-z0-9.]+")).map { it.trim('.') }.filter { it.isNotBlank() }.toSet()
+
+    /** Photo link for a product: the matching rule with the most keywords ("" = none). */
+    fun photoFor(p: Product): String {
+        val have = tokens("${p.category} ${p.brand} ${p.name}")
+        var best: PhotoRule? = null
+        for (r in photoRules) {
+            if (r.words.isNotEmpty() && have.containsAll(r.words) &&
+                (best == null || r.words.size > best.words.size)) best = r
+        }
+        return best?.url ?: ""
+    }
+
+    private fun parsePhotos(csv: String): List<PhotoRule> =
+        Csv.parse(csv).drop(1).mapNotNull { r ->
+            val words = tokens(r.getOrNull(0) ?: "").toList()
+            if (words.isEmpty()) null else PhotoRule(words, (r.getOrNull(1) ?: "").trim())
+        }
 
     /** Categories in the order they first appear in the sheet. */
     fun categories(): List<Category> =
