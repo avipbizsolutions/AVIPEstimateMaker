@@ -181,11 +181,11 @@ fun variantCard(a: Activity, variants: List<Product>, onChange: () -> Unit): Vie
         if (other != null) addView(text("Also in quotation: ${Fmt.qty(Cart.qtyOf(other.id))} × ${variantLabel(other)}",
             11.5f, Ui.BRAND, bold = true), lp().margins(context, t = 6))
     }
-    productCard(a, selected, onChange, title = selected.group.ifBlank { selected.name }, extra = extra)
+    productCard(a, selected, title = selected.group.ifBlank { selected.name }, extra = extra, onChange = onChange)
 }
 
 /** A product card with price and an Add / − qty + control. Used by list screens. */
-fun productCard(a: Activity, p: Product, onChange: () -> Unit, title: String = p.name, extra: View? = null): View = with(a) {
+fun productCard(a: Activity, p: Product, title: String = p.name, extra: View? = null, onChange: () -> Unit): View = with(a) {
     card(12) {
         addView(horizontal {
             gravity = Gravity.TOP
