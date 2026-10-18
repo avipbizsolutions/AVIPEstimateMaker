@@ -125,7 +125,7 @@ class ProductsActivity : AppCompatActivity() {
         val doneGroups = mutableSetOf<String>()
         shown.forEach { p ->
             val variants = Catalog.variantsOf(p)
-            if (variants.size > 1 && !doneGroups.add(p.category + "|" + p.group)) return@forEach
+            if (variants.size > 1 && !doneGroups.add(variants.joinToString("|") { it.id })) return@forEach
             if (category == null && p.category != lastCat) {
                 lastCat = p.category
                 list.addView(text(p.category, 13f, Ui.BRAND, bold = true), lp().margins(this, t = 8, b = 6, l = 4))
@@ -139,9 +139,12 @@ class ProductsActivity : AppCompatActivity() {
 /** Which version (packet / loose) each combined card is showing; kept while the app is open. */
 private val chosenVariant = mutableMapOf<String, String>()
 
-/** Label for the switch: "Packet", "Packet · 200pc", "Roll · 25mtr" or "Loose · per pc". */
+/** Label for the switch: "Packet", "Packet · 200pc", "Roll · 25mtr", "Loose · per pc",
+ *  "Single panel" or "Pallet of 36". */
 private fun variantLabel(p: Product): String {
     if (p.isLoose) return "Loose · per ${p.unit.lowercase()}"
+    if (p.isPallet) return "Pallet of ${p.minQty}"
+    if (p.unit.equals("Panel", true)) return "Single panel"
     val detail = Regex("\\(([^)]*)\\)\\s*$").find(p.name)?.groupValues?.get(1)?.trim() ?: ""
     return if (detail.isBlank() || detail.equals(p.unit, true) || detail.equals("packet", true)) p.unit
     else "${p.unit} · $detail"
@@ -149,7 +152,7 @@ private fun variantLabel(p: Product): String {
 
 /** One card for an item sold both by packet and loose, with a Packet | Loose switch. */
 fun variantCard(a: Activity, variants: List<Product>, onChange: () -> Unit): View = with(a) {
-    val key = variants[0].category + "|" + variants[0].group
+    val key = variants.joinToString("|") { it.id }
     val inCart = variants.filter { Cart.qtyOf(it.id) > 0 }
     val selected = variants.firstOrNull { it.id == chosenVariant[key] }
         ?: inCart.firstOrNull()
@@ -169,7 +172,12 @@ fun variantCard(a: Activity, variants: List<Product>, onChange: () -> Unit): Vie
                     gravity = Gravity.CENTER; maxLines = 1
                 })
                 val price = v.unitPrice
-                addView(text(if (price != null) Fmt.inr(price, price < 100) else "Rate on request",
+                val priceText = when {
+                    price == null -> "Rate on request"
+                    v.perWp && v.rate != null -> "₹${Fmt.num(v.rate)}/Wp · ${v.spec}"
+                    else -> Fmt.inr(price, price < 100)
+                }
+                addView(text(priceText,
                     11f, if (on) 0xDDFFFFFF.toInt() else Ui.MUTED) { gravity = Gravity.CENTER })
                 setOnClickListener { chosenVariant[key] = v.id; onChange() }
             }, lp(0, WRAP, 1f))
@@ -178,7 +186,12 @@ fun variantCard(a: Activity, variants: List<Product>, onChange: () -> Unit): Vie
     val other = variants.firstOrNull { it != selected && Cart.qtyOf(it.id) > 0 }
     val extra = vertical {
         addView(switch)
-        if (other != null) addView(text("Also in quotation: ${Fmt.qty(Cart.qtyOf(other.id))} × ${variantLabel(other)}",
+        val otherText = other?.let {
+            val q = Fmt.qty(Cart.qtyOf(it.id))
+            if (it.isPallet) "Also in quotation: $q panels at pallet rate"
+            else "Also in quotation: $q × ${variantLabel(it)}"
+        }
+        if (otherText != null) addView(text(otherText,
             11.5f, Ui.BRAND, bold = true), lp().margins(context, t = 6))
     }
     productCard(a, selected, title = selected.group.ifBlank { selected.name }, extra = extra, onChange = onChange)

@@ -105,15 +105,25 @@ object Catalog {
     fun byId(id: String?): Product? = products.firstOrNull { it.id == id }
 
     /**
-     * Packet + loose versions of the same item, packet first (e.g. "20 mm PVC Elbows"
-     * per packet and per piece). Returns just [p] when it has no loose/packet partner.
+     * Versions of the same item shown on one card:
+     * packet + loose (e.g. "20 mm PVC Elbows" per packet and per piece), or
+     * single panel + pallet (same brand). Returns just [p] when it has no partner.
      */
     fun variantsOf(p: Product): List<Product> {
-        if (p.group.isBlank() || p.isPallet) return listOf(p)
-        val same = products.filter { it.category == p.category && it.group == p.group && !it.isPallet }
-        val loose = same.filter { it.isLoose }
-        val packs = same.filter { !it.isLoose }
-        return if (loose.size == 1 && packs.size == 1) packs + loose else listOf(p)
+        if (p.group.isBlank()) return listOf(p)
+        val same = products.filter { it.category == p.category && it.group == p.group }
+        if (!p.isPallet) {
+            val loose = same.filter { it.isLoose }
+            val packs = same.filter { !it.isLoose && !it.isPallet }
+            if (loose.size == 1 && packs.size == 1 && (p.isLoose || p == packs[0])) return packs + loose
+        }
+        if (!p.isLoose) {
+            val brand = same.filter { it.brand == p.brand && !it.isLoose }
+            val singles = brand.filter { !it.isPallet }
+            val pallets = brand.filter { it.isPallet }
+            if (singles.size == 1 && pallets.size == 1) return singles + pallets
+        }
+        return listOf(p)
     }
 
     private fun tokens(text: String): Set<String> =
