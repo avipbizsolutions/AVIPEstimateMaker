@@ -21,7 +21,7 @@ Everything comes from the Google Sheet (must stay *Anyone with the link → View
 | Tab | Purpose |
 |---|---|
 | **Worksheet** | The price list your team edits. Everything in the app comes from here. |
-| **App Prices** | Auto-filled from the Worksheet by a formula — do not type in it. The note on cell A1 lists the Worksheet rules (category headings with GST, Wp in the Brand column for panels, "Pellet Pricing" and "Per pc" rows). |
+| **App Prices** | Auto-filled from the Worksheet by a formula — do not type in it. The note on cell A1 lists the Worksheet rules (category headings with GST, Wp in the Brand column for panels, "Pellet Pricing" and "Per pc" rows). A "Per pc" / "Per mtr" row under a packet item shows in the app as one card with a Packet \| Loose switch. |
 | **Product Photos** | Keywords → photo link. Paste Google Drive share links or any image link; blank = category icon. |
 | **App Settings** | Company details, bank, terms, validity, WhatsApp number, Grievance Officers, home-screen announcement. |
 | **Surya Saathi** | Filled automatically when partners register (needs the Apps Script below). |

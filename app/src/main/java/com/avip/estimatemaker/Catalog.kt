@@ -104,6 +104,18 @@ object Catalog {
 
     fun byId(id: String?): Product? = products.firstOrNull { it.id == id }
 
+    /**
+     * Packet + loose versions of the same item, packet first (e.g. "20 mm PVC Elbows"
+     * per packet and per piece). Returns just [p] when it has no loose/packet partner.
+     */
+    fun variantsOf(p: Product): List<Product> {
+        if (p.group.isBlank() || p.isPallet) return listOf(p)
+        val same = products.filter { it.category == p.category && it.group == p.group && !it.isPallet }
+        val loose = same.filter { it.isLoose }
+        val packs = same.filter { !it.isLoose }
+        return if (loose.size == 1 && packs.size == 1) packs + loose else listOf(p)
+    }
+
     private fun tokens(text: String): Set<String> =
         text.lowercase().split(Regex("[^a-z0-9.]+")).map { it.trim('.') }.filter { it.isNotBlank() }.toSet()
 
@@ -153,6 +165,7 @@ object Catalog {
         val cUnit = col("unit"); val cRate = col("rate"); val cBasis = col("rate basis")
         val cWp = col("wp"); val cGst = col("gst %", "gst"); val cMin = col("min qty")
         val cStock = col("in stock"); val cNotes = col("notes")
+        val cGroup = col("group"); val cPack = col("pack")
         if (cName < 0 || cRate < 0) return emptyList()
 
         return rows.drop(1).mapIndexedNotNull { i, r ->
@@ -175,6 +188,8 @@ object Catalog {
                 minQty = number(v(cMin))?.toInt()?.coerceAtLeast(1) ?: 1,
                 inStock = !(stock == "no" || stock == "n" || stock == "false"),
                 notes = v(cNotes),
+                group = v(cGroup),
+                pack = v(cPack),
             )
         }
     }

@@ -20,7 +20,14 @@ data class Product(
     val minQty: Int,
     val inStock: Boolean,
     val notes: String,
+    /** Packet and loose rows of the same item share a group name (from the sheet). */
+    val group: String = "",
+    /** "Loose", "Pallet" or "" (normal / packet). */
+    val pack: String = "",
 ) {
+    val isLoose get() = pack.equals("Loose", ignoreCase = true)
+    val isPallet get() = pack.equals("Pallet", ignoreCase = true)
+
     /** Price of one unit (one panel, one kit, one kg …), before GST. */
     val unitPrice: Double?
         get() = rate?.let { r -> if (perWp && wp != null && wp > 0) round2(r * wp) else r }

@@ -122,18 +122,70 @@ class ProductsActivity : AppCompatActivity() {
             return
         }
         var lastCat = ""
+        val doneGroups = mutableSetOf<String>()
         shown.forEach { p ->
+            val variants = Catalog.variantsOf(p)
+            if (variants.size > 1 && !doneGroups.add(p.category + "|" + p.group)) return@forEach
             if (category == null && p.category != lastCat) {
                 lastCat = p.category
                 list.addView(text(p.category, 13f, Ui.BRAND, bold = true), lp().margins(this, t = 8, b = 6, l = 4))
             }
-            list.addView(productCard(this, p) { render() }, lp().margins(this, b = 10))
+            val card = if (variants.size > 1) variantCard(this, variants) { render() } else productCard(this, p) { render() }
+            list.addView(card, lp().margins(this, b = 10))
         }
     }
 }
 
+/** Which version (packet / loose) each combined card is showing; kept while the app is open. */
+private val chosenVariant = mutableMapOf<String, String>()
+
+/** Label for the switch: "Packet", "Packet · 200pc", "Roll · 25mtr" or "Loose · per pc". */
+private fun variantLabel(p: Product): String {
+    if (p.isLoose) return "Loose · per ${p.unit.lowercase()}"
+    val detail = Regex("\\(([^)]*)\\)\\s*$").find(p.name)?.groupValues?.get(1)?.trim() ?: ""
+    return if (detail.isBlank() || detail.equals(p.unit, true) || detail.equals("packet", true)) p.unit
+    else "${p.unit} · $detail"
+}
+
+/** One card for an item sold both by packet and loose, with a Packet | Loose switch. */
+fun variantCard(a: Activity, variants: List<Product>, onChange: () -> Unit): View = with(a) {
+    val key = variants[0].category + "|" + variants[0].group
+    val inCart = variants.filter { Cart.qtyOf(it.id) > 0 }
+    val selected = variants.firstOrNull { it.id == chosenVariant[key] }
+        ?: inCart.firstOrNull()
+        ?: variants.firstOrNull { it.available }
+        ?: variants[0]
+
+    val switch = horizontal {
+        background = rounded(0xFFEFF3F1.toInt(), dpf(22f))
+        setPadding(dp(4), dp(4), dp(4), dp(4))
+        variants.forEach { v ->
+            val on = v == selected
+            addView(vertical {
+                gravity = Gravity.CENTER
+                background = if (on) rounded(Ui.BRAND, dpf(18f)) else null
+                setPadding(dp(8), dp(7), dp(8), dp(7))
+                addView(text(variantLabel(v), 12.5f, if (on) Color.WHITE else Ui.TEXT, bold = true) {
+                    gravity = Gravity.CENTER; maxLines = 1
+                })
+                val price = v.unitPrice
+                addView(text(if (price != null) Fmt.inr(price, price < 100) else "Rate on request",
+                    11f, if (on) 0xDDFFFFFF.toInt() else Ui.MUTED) { gravity = Gravity.CENTER })
+                setOnClickListener { chosenVariant[key] = v.id; onChange() }
+            }, lp(0, WRAP, 1f))
+        }
+    }
+    val other = variants.firstOrNull { it != selected && Cart.qtyOf(it.id) > 0 }
+    val extra = vertical {
+        addView(switch)
+        if (other != null) addView(text("Also in quotation: ${Fmt.qty(Cart.qtyOf(other.id))} × ${variantLabel(other)}",
+            11.5f, Ui.BRAND, bold = true), lp().margins(context, t = 6))
+    }
+    productCard(a, selected, onChange, title = selected.group.ifBlank { selected.name }, extra = extra)
+}
+
 /** A product card with price and an Add / − qty + control. Used by list screens. */
-fun productCard(a: Activity, p: Product, onChange: () -> Unit): View = with(a) {
+fun productCard(a: Activity, p: Product, onChange: () -> Unit, title: String = p.name, extra: View? = null): View = with(a) {
     card(12) {
         addView(horizontal {
             gravity = Gravity.TOP
@@ -142,12 +194,13 @@ fun productCard(a: Activity, p: Product, onChange: () -> Unit): View = with(a) {
                 if (p.brand.isNotBlank()) addView(text(p.brand.uppercase(), 10.5f, Ui.categoryColor(p.icon), bold = true) {
                     letterSpacing = 0.06f
                 })
-                addView(text(p.name, 15f, Ui.TEXT, bold = true))
+                addView(text(title, 15f, Ui.TEXT, bold = true))
                 val sub = listOf(p.spec, "per ${p.unit.lowercase()}").filter { it.isNotBlank() }.joinToString(" · ")
                 addView(text(sub, 12f, Ui.MUTED), lp().margins(context, t = 2))
                 if (p.notes.isNotBlank() && p.available) addView(text(p.notes, 11.5f, 0xFFB26A00.toInt()), lp().margins(context, t = 2))
             }, lp(0, WRAP, 1f).margins(context, l = 12))
         })
+        if (extra != null) addView(extra, lp().margins(context, t = 10))
 
         addView(horizontal {
             if (p.available) {
