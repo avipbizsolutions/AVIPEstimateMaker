@@ -1,4 +1,4 @@
-name: Build APK
+name: Build APK and Play bundle
 
 on:
   push:
@@ -20,7 +20,7 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: "8.7"
+          gradle-version: "8.11.1"
 
       - name: Set version
         run: |
@@ -28,17 +28,34 @@ jobs:
           echo "VERSION_CODE=$code" >> "$GITHUB_ENV"
           echo "VERSION_NAME=1.0.$code" >> "$GITHUB_ENV"
 
-      - name: Build APK
+      # Google Play upload key comes from repo secrets; it is never stored in the repo.
+      - name: Prepare Play upload key
+        env:
+          PLAY_UPLOAD_KEYSTORE: ${{ secrets.PLAY_UPLOAD_KEYSTORE }}
+        run: |
+          if [ -n "$PLAY_UPLOAD_KEYSTORE" ]; then
+            echo "$PLAY_UPLOAD_KEYSTORE" | base64 -d > "$RUNNER_TEMP/upload.p12"
+            echo "PLAY_UPLOAD_KEYSTORE_FILE=$RUNNER_TEMP/upload.p12" >> "$GITHUB_ENV"
+            echo "AAB_SUFFIX=" >> "$GITHUB_ENV"
+          else
+            echo "AAB_SUFFIX=-UNSIGNED" >> "$GITHUB_ENV"
+            echo "::warning title=Play bundle not signed::Add the PLAY_UPLOAD_KEYSTORE and PLAY_UPLOAD_PASSWORD secrets to get a signed .aab for Google Play."
+          fi
+
+      - name: Build APK (GitHub) and bundle (Google Play)
+        env:
+          PLAY_UPLOAD_PASSWORD: ${{ secrets.PLAY_UPLOAD_PASSWORD }}
         run: |
           set -o pipefail
-          gradle assembleRelease --console=plain 2>&1 | tee build.log
-          cp app/build/outputs/apk/release/app-release.apk "Bihar-Solar-Circle-${VERSION_NAME}.apk"
+          gradle assembleGithubRelease bundlePlayRelease --console=plain 2>&1 | tee build.log
+          apk=app/build/outputs/apk/github/release/app-github-release.apk
+          cp $apk "Bihar-Solar-Circle-${VERSION_NAME}.apk"
           # Fixed name, so .../releases/latest/download/Bihar-Solar-Circle.apk always gets the newest
-          cp app/build/outputs/apk/release/app-release.apk Bihar-Solar-Circle.apk
+          cp $apk Bihar-Solar-Circle.apk
           # Older download links keep working
-          cp app/build/outputs/apk/release/app-release.apk AVIP-Surya-Saathi.apk
-          # Old download link from before the rename keeps working
-          cp app/build/outputs/apk/release/app-release.apk AVIP-Estimate-Maker.apk
+          cp $apk AVIP-Surya-Saathi.apk
+          cp $apk AVIP-Estimate-Maker.apk
+          cp app/build/outputs/bundle/playRelease/app-play-release.aab "Bihar-Solar-Circle-Play-${VERSION_NAME}${AAB_SUFFIX}.aab"
 
       - name: Report build errors
         if: failure()
@@ -52,7 +69,14 @@ jobs:
           name: Bihar-Solar-Circle-${{ env.VERSION_NAME }}-apk
           path: Bihar-Solar-Circle-${{ env.VERSION_NAME }}.apk
 
-      # Phones check this release on launch and update themselves.
+      # Upload this .aab in Play Console (signed with the upload key once the secrets are set).
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Bihar-Solar-Circle-Play-${{ env.VERSION_NAME }}${{ env.AAB_SUFFIX }}-aab
+          path: Bihar-Solar-Circle-Play-*.aab
+
+      # GitHub-build phones check this release on launch and update themselves.
+      # The .aab is the Google Play upload (the Play app never reads this release).
       - name: Publish release
         if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
@@ -65,4 +89,5 @@ jobs:
             Bihar-Solar-Circle.apk
             AVIP-Surya-Saathi.apk
             AVIP-Estimate-Maker.apk
+            Bihar-Solar-Circle-Play-*.aab
           make_latest: true

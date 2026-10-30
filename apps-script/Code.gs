@@ -1,5 +1,6 @@
 /**
- * AVIP Surya Saathi app – receives Surya Saathi sign-ups and quotation summaries from the app.
+ * Bihar Solar Circle app – receives Surya Saathi sign-ups, quotation summaries and
+ * account-deletion requests from the app.
  *
  * Setup (one time):
  * 1. Open the price sheet > Extensions > Apps Script, paste this file, Save.
@@ -37,6 +38,21 @@ function doPost(e) {
         clean(d.gst), clean(d.items, 2000),
         Number(d.subTotal) || 0, Number(d.gstAmount) || 0, Number(d.grandTotal) || 0,
       ]);
+    } else if (d.kind === 'delete') {
+      // "Delete my account" in the app: remove the Surya Saathi's registration and
+      // quotation rows, and keep only a dated note that a deletion was done.
+      const mobile = clean(d.mobile), gst = clean(d.gst), id = clean(d.installId);
+      let removed = 0;
+      removed += deleteRows(book.getSheetByName('Surya Saathi'), r =>
+        (id && String(r[6]) === id) || (mobile && gst && String(r[3]) === mobile && String(r[4]).toUpperCase() === gst.toUpperCase()));
+      removed += deleteRows(book.getSheetByName('Quotations Log'), r =>
+        mobile && gst && String(r[4]) === mobile && String(r[5]).toUpperCase() === gst.toUpperCase());
+      let log = book.getSheetByName('Deletion Requests');
+      if (!log) {
+        log = book.insertSheet('Deletion Requests');
+        log.appendRow(['Date', 'Source', 'Rows removed']);
+      }
+      log.appendRow([new Date(), 'App: Delete my account', removed]);
     } else {
       return reply({ ok: false, error: 'unknown kind' });
     }
@@ -46,6 +62,17 @@ function doPost(e) {
   } finally {
     try { lock.releaseLock(); } catch (_) {}
   }
+}
+
+// Deletes data rows (below the header) that match; returns how many were removed.
+function deleteRows(sheet, match) {
+  if (!sheet || sheet.getLastRow() < 2) return 0;
+  const rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).getValues();
+  let n = 0;
+  for (let i = rows.length - 1; i >= 0; i--) {
+    if (match(rows[i])) { sheet.deleteRow(i + 2); n++; }
+  }
+  return n;
 }
 
 // Trim, cap length, and stop text being read as a formula.

@@ -17,7 +17,12 @@ import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
+import androidx.activity.enableEdgeToEdge
 import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 
 /** Small helpers so screens can be built in code with one consistent look. */
 object Ui {
@@ -179,6 +184,7 @@ const val MATCH = ViewGroup.LayoutParams.MATCH_PARENT
 /** Green top bar with back arrow, title and optional right-side views. */
 fun Activity.topBar(title: String, subtitle: String? = null, showBack: Boolean = true, right: List<View> = emptyList()): View =
     horizontal {
+        tag = TOP_BAR
         background = gradient(0f, Ui.BRAND_DARK, Ui.BRAND)
         setPadding(dp(8), dp(10), dp(12), dp(10))
         minimumHeight = dp(60)
@@ -329,5 +335,57 @@ fun Activity.grievanceCard(): View = card {
                 setOnClickListener { EstimateStore.call(this@grievanceCard, number) }
             })
         }, lp().margins(context, t = 6))
+    }
+}
+
+/** Privacy policy page (App Settings → privacy_url can point it elsewhere). */
+fun privacyUrl(): String =
+    Catalog.settings["privacy_url"].takeIf { it.startsWith("https://") }
+        ?: "https://avipsolar.in/bihar-solar-circle-privacy-policy/"
+
+fun Activity.openWeb(url: String) {
+    try {
+        startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url)))
+    } catch (_: Exception) {
+        android.widget.Toast.makeText(this, "No browser found to open $url", android.widget.Toast.LENGTH_LONG).show()
+    }
+}
+
+/** Underlined "Privacy Policy" link. */
+fun Activity.privacyLink(): View = text("Privacy Policy", 13f, Ui.BRAND_DARK, bold = true) {
+    paintFlags = paintFlags or android.graphics.Paint.UNDERLINE_TEXT_FLAG
+    setPadding(dp(12), dp(10), dp(12), dp(10))
+    setOnClickListener { openWeb(privacyUrl()) }
+}
+
+private const val TOP_BAR = "top_bar"
+
+/**
+ * setContentView for Android 15+ edge-to-edge: the app draws behind the status and
+ * navigation bars, so the green top bar is padded below the status bar, and the screen
+ * is padded above the navigation bar and the keyboard.
+ * lightBars = false for dark screens (splash), so the bar icons stay white.
+ */
+fun ComponentActivity.setEdgeContent(root: View, lightBars: Boolean = true) {
+    enableEdgeToEdge(
+        statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
+        navigationBarStyle = if (lightBars) SystemBarStyle.light(Color.TRANSPARENT, 0x66000000)
+        else SystemBarStyle.dark(Color.TRANSPARENT),
+    )
+    setContentView(root)
+    val bar = root.findViewWithTag<View>(TOP_BAR)
+    val rootPad = intArrayOf(root.paddingLeft, root.paddingTop, root.paddingRight, root.paddingBottom)
+    val barTop = bar?.paddingTop ?: 0
+    ViewCompat.setOnApplyWindowInsetsListener(root) { _, insets ->
+        val sys = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
+        val ime = insets.getInsets(WindowInsetsCompat.Type.ime())
+        if (bar != null) bar.setPadding(bar.paddingLeft, barTop + sys.top, bar.paddingRight, bar.paddingBottom)
+        root.setPadding(
+            rootPad[0] + sys.left,
+            rootPad[1] + (if (bar == null) sys.top else 0),
+            rootPad[2] + sys.right,
+            rootPad[3] + maxOf(sys.bottom, ime.bottom),
+        )
+        WindowInsetsCompat.CONSUMED
     }
 }

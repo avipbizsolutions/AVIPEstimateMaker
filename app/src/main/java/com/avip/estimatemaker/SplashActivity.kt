@@ -1,36 +1,22 @@
 package com.avip.estimatemaker
 
 import android.annotation.SuppressLint
-import android.content.BroadcastReceiver
-import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
-import android.content.pm.PackageInstaller
-import android.graphics.Color
-import android.net.Uri
 import android.os.Bundle
-import android.provider.Settings
 import android.view.Gravity
 import android.view.View
 import android.widget.ImageView
-import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.content.ContextCompat
-import androidx.core.content.IntentCompat
 import androidx.lifecycle.lifecycleScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
-/** Launch screen: loads latest prices, installs app updates, then opens the app. */
+/** Launch screen: loads latest prices (and, in the GitHub build, app updates), then opens the app. */
 @SuppressLint("CustomSplashScreen")
 class SplashActivity : AppCompatActivity() {
 
@@ -38,34 +24,11 @@ class SplashActivity : AppCompatActivity() {
     private lateinit var progress: ProgressBar
     private lateinit var retry: View
     private var leaving = false
-    private var pendingRelease: ReleaseInfo? = null
 
     private val prefs by lazy { getSharedPreferences("settings", MODE_PRIVATE) }
 
-    private val installStatusReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context, intent: Intent) {
-            when (intent.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE)) {
-                PackageInstaller.STATUS_PENDING_USER_ACTION -> {
-                    val confirm = IntentCompat.getParcelableExtra(intent, Intent.EXTRA_INTENT, Intent::class.java)
-                    if (confirm != null) {
-                        try {
-                            startActivity(confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); return
-                        } catch (_: Exception) {
-                        }
-                    }
-                    goNext()
-                }
-                PackageInstaller.STATUS_SUCCESS -> {}
-                else -> { toast("Update could not be installed"); goNext() }
-            }
-        }
-    }
-
-    private val unknownSourcesLauncher =
-        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
-            val r = pendingRelease
-            if (r != null && Updater.canInstall(this)) lifecycleScope.launch { downloadAndInstall(r) } else goNext()
-        }
+    /** GitHub build: self-update. Google Play build: does nothing. */
+    private val updates = SelfUpdate(this)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -98,30 +61,27 @@ class SplashActivity : AppCompatActivity() {
         root.addView(retry, lp(dp(160), WRAP).margins(this, t = 16))
         root.addView(View(this), lp(MATCH, 0, 1f))
         root.addView(text("by AVIP Business Solutions LLP", 14f, Ui.SUN, bold = true) { gravity = Gravity.CENTER }, lp(WRAP, WRAP))
-        root.addView(text("v" + Updater.currentVersionName(this), 11f, 0x99FFFFFF.toInt()), lp(WRAP, WRAP).margins(this, t = 4, b = 8))
-        setContentView(root)
+        root.addView(text("v" + AppInfo.versionName(this), 11f, 0x99FFFFFF.toInt()), lp(WRAP, WRAP).margins(this, t = 4, b = 8))
+        setEdgeContent(root, lightBars = false)
 
         brandBlock.alpha = 0f
         brandBlock.animate().alpha(1f).setDuration(450).start()
 
-        ContextCompat.registerReceiver(
-            this, installStatusReceiver, IntentFilter(Updater.ACTION_INSTALL_STATUS),
-            ContextCompat.RECEIVER_NOT_EXPORTED
-        )
+        updates.onCreate()
         Cart.load(this)
 
         // Tell the user once after an update.
-        val versionCode = Updater.currentVersionCode(this)
+        val versionCode = AppInfo.versionCode(this)
         val lastSeen = prefs.getLong("last_version_code", 0L)
         if (lastSeen in 1 until versionCode) {
-            Toast.makeText(this, "Updated to version ${Updater.currentVersionName(this)}", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Updated to version ${AppInfo.versionName(this)}", Toast.LENGTH_LONG).show()
         }
         prefs.edit().putLong("last_version_code", versionCode).apply()
 
         start()
     }
 
-    private fun start() {
+    fun start() {
         retry.visibility = View.GONE
         status.text = "Loading latest prices…"
         progress.visibility = View.VISIBLE
@@ -130,19 +90,11 @@ class SplashActivity : AppCompatActivity() {
 
         lifecycleScope.launch {
             val minimum = async { delay(1200) }
-            val update = async { withTimeoutOrNull(5000) { withContext(Dispatchers.IO) { Updater.fetchLatest() } } }
+            val update = async { updates.fetchLatest() }
             val fresh = withTimeoutOrNull(10000) { Catalog.refresh(this@SplashActivity) } ?: false
             Remote.flushAsync(this@SplashActivity)
 
-            val latest = update.await()
-            val current = Updater.currentVersionCode(this@SplashActivity)
-            if (latest != null && latest.versionCode > current) {
-                pendingRelease = latest
-                if (Updater.canInstall(this@SplashActivity)) { downloadAndInstall(latest); return@launch }
-                if (prefs.getLong("declined_update", 0L) != latest.versionCode) {
-                    askInstallPermission(latest); return@launch
-                }
-            }
+            if (updates.offer(update.await())) return@launch
             minimum.await()
             if (!fresh && !hadCache) {
                 progress.visibility = View.GONE
@@ -157,43 +109,17 @@ class SplashActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        try { unregisterReceiver(installStatusReceiver) } catch (_: Exception) {}
+        updates.onDestroy()
     }
 
-    private suspend fun downloadAndInstall(release: ReleaseInfo) {
-        status.text = "Updating to version ${release.versionName}…"
+    fun showStatus(text: String) { status.text = text }
+
+    fun showProgress(pct: Int) {
         progress.isIndeterminate = false
-        progress.progress = 0
-        val apk = withContext(Dispatchers.IO) {
-            Updater.download(this@SplashActivity, release) { pct -> runOnUiThread { progress.progress = pct } }
-        }
-        if (apk == null) { toast("Update download failed"); goNext(); return }
-        status.text = "Installing update…"
-        try {
-            withContext(Dispatchers.IO) { Updater.install(this@SplashActivity, apk) }
-        } catch (_: Exception) {
-            toast("Update could not be installed"); goNext()
-        }
+        progress.progress = pct
     }
 
-    private fun askInstallPermission(release: ReleaseInfo) {
-        AlertDialog.Builder(this)
-            .setTitle("New version available")
-            .setMessage("Version ${release.versionName} is ready. Allow Bihar Solar Circle to install its own updates? This is needed only once.")
-            .setCancelable(false)
-            .setPositiveButton("Allow") { _, _ ->
-                unknownSourcesLauncher.launch(
-                    Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:$packageName"))
-                )
-            }
-            .setNegativeButton("Later") { _, _ ->
-                prefs.edit().putLong("declined_update", release.versionCode).apply()
-                if (Catalog.isLoaded) goNext() else start()
-            }
-            .show()
-    }
-
-    private fun goNext() {
+    fun goNext() {
         if (leaving || isFinishing) return
         if (!Catalog.isLoaded) { start(); return }
         leaving = true
@@ -204,5 +130,5 @@ class SplashActivity : AppCompatActivity() {
         finish()
     }
 
-    private fun toast(msg: String) = Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+    fun toast(msg: String) = Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
 }

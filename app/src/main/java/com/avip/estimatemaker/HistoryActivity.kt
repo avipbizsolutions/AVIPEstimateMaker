@@ -23,7 +23,7 @@ class HistoryActivity : AppCompatActivity() {
         root.addView(topBar("My Quotations", "Saved on this phone"))
         list = vertical(14)
         root.addView(ScrollView(this).apply { addView(list) }, lp(MATCH, 0, 1f))
-        setContentView(root)
+        setEdgeContent(root)
     }
 
     override fun onResume() {

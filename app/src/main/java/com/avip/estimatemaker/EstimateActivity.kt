@@ -44,7 +44,7 @@ class EstimateActivity : AppCompatActivity() {
         root.addView(ScrollView(this).apply { addView(body) }, lp(MATCH, 0, 1f))
         totalsBox = vertical { setPadding(dp(16), dp(12), dp(16), dp(14)); setBackgroundColor(Color.WHITE); elevation = dpf(10f) }
         root.addView(totalsBox)
-        setContentView(root)
+        setEdgeContent(root)
     }
 
     override fun onResume() {

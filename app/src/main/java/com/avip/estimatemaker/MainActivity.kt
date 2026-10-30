@@ -48,21 +48,10 @@ class MainActivity : AppCompatActivity() {
         root.addView(ScrollView(this).apply { addView(content) }, lp(MATCH, 0, 1f))
         bar = cartBar()
         root.addView(bar)
-        setContentView(root)
+        setEdgeContent(root)
         build()
         refreshPrices(false)
-        askNotificationsOnce()
-    }
-
-    /** Android 13+: allow the "app updated" notice. Asked once. */
-    private fun askNotificationsOnce() {
-        if (android.os.Build.VERSION.SDK_INT < 33) return
-        val prefs = getSharedPreferences("settings", MODE_PRIVATE)
-        if (prefs.getBoolean("asked_notifications", false)) return
-        prefs.edit().putBoolean("asked_notifications", true).apply()
-        if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 7)
-        }
+        Store.onHomeOpened(this)
     }
 
     override fun onResume() {
@@ -119,6 +108,24 @@ class MainActivity : AppCompatActivity() {
             content.addView(card(12) {
                 background = rounded(0xFFFFF4E0.toInt(), dpf(14f))
                 addView(text("📢  " + s["announcement"], 13.5f, Ui.TEXT))
+            }, lp().margins(this, t = 12))
+        }
+
+        // GitHub build only: point users to the Google Play version once it is live
+        // (App Settings → play_store_link).
+        val playLink = s["play_store_link"]
+        if (!Store.IS_PLAY && playLink.startsWith("https://")) {
+            content.addView(card(14) {
+                background = rounded(0xFFE8F3EC.toInt(), dpf(14f), Ui.BRAND, dp(1))
+                addView(text("Bihar Solar Circle is now on Google Play", 15f, Ui.TEXT, bold = true))
+                addView(text("Install the Play Store version to keep getting updates. Then register once more there and uninstall this copy.", 12.5f, Ui.MUTED), lp().margins(context, t = 4, b = 10))
+                addView(pillButton("Get it on Google Play  ›", Ui.BRAND, Color.WHITE, 44) {
+                    try {
+                        startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(playLink)))
+                    } catch (_: Exception) {
+                        Toast.makeText(this@MainActivity, "Couldn't open Google Play", Toast.LENGTH_SHORT).show()
+                    }
+                })
             }, lp().margins(this, t = 12))
         }
 
@@ -190,6 +197,7 @@ class MainActivity : AppCompatActivity() {
             })
         }, lp().margins(this, t = 12))
 
-        content.addView(grievanceCard(), lp().margins(this, t = 12, b = 20))
+        content.addView(grievanceCard(), lp().margins(this, t = 12))
+        content.addView(privacyLink(), lp(WRAP, WRAP).margins(this, t = 8, b = 20).apply { gravity = Gravity.CENTER_HORIZONTAL })
     }
 }

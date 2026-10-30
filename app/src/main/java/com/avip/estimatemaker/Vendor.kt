@@ -55,9 +55,31 @@ object Vendor {
                 .put("city", city)
                 .put("installId", installId(c))
                 .put("device", "${Build.MANUFACTURER} ${Build.MODEL}")
-                .put("appVersion", Updater.currentVersionName(c))
+                .put("appVersion", AppInfo.versionName(c))
         )
     }
+}
+
+/**
+ * Deletes the Surya Saathi's account: asks AVIP's sheet to remove their registration and
+ * quotation records, and wipes their details, cart and saved quotations from this phone.
+ * The request waits in the outbox until it can be sent.
+ */
+fun Vendor.deleteAccount(c: Context) {
+    // Drop any not-yet-sent sign-up or quotation records first.
+    Remote.keepOnly(c, "delete")
+    Remote.queue(
+        c, JSONObject()
+            .put("kind", "delete")
+            .put("mobile", mobile(c))
+            .put("gst", gst(c))
+            .put("installId", installId(c))
+    )
+    val keepId = installId(c)
+    c.applicationContext.getSharedPreferences("vendor", Context.MODE_PRIVATE).edit()
+        .clear().putString("install_id", keepId).apply()
+    Cart.clear(c)
+    EstimateStore.deleteAll(c)
 }
 
 /**
@@ -85,6 +107,20 @@ object Remote {
         flushAsync(c)
     }
 
+    /** Removes queued items except those of the given kind. */
+    fun keepOnly(c: Context, kind: String) {
+        val p = c.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        synchronized(this) {
+            val arr = JSONArray(p.getString("pending", "[]") ?: "[]")
+            val kept = JSONArray()
+            for (i in 0 until arr.length()) {
+                val o = arr.optJSONObject(i) ?: continue
+                if (o.optString("kind") == kind) kept.put(o)
+            }
+            p.edit().putString("pending", kept.toString()).apply()
+        }
+    }
+
     fun flushAsync(context: Context) {
         val c = context.applicationContext
         val endpoint = Catalog.settings["saathi_log_url"].ifBlank { Catalog.settings["vendor_log_url"] }
@@ -99,10 +135,17 @@ object Remote {
                         if (arr.length() == 0) null else arr.getJSONObject(0)
                     } ?: break
                     if (!post(endpoint, JSONObject(first.toString()).put("key", SHARED_KEY).toString())) break
+                    // Remove exactly the item just sent (the queue may have changed meanwhile).
                     synchronized(this) {
                         val arr = JSONArray(p.getString("pending", "[]") ?: "[]")
+                        val sent = first.toString()
                         val rest = JSONArray()
-                        for (i in 1 until arr.length()) rest.put(arr.get(i))
+                        var removed = false
+                        for (i in 0 until arr.length()) {
+                            val o = arr.get(i)
+                            if (!removed && o.toString() == sent) { removed = true; continue }
+                            rest.put(o)
+                        }
                         p.edit().putString("pending", rest.toString()).apply()
                     }
                 }

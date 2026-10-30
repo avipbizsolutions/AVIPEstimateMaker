@@ -50,6 +50,11 @@ object EstimateStore {
         jsonFile(c, doc.number).delete()
     }
 
+    /** Deletes every saved quotation (used when the Surya Saathi deletes their account). */
+    fun deleteAll(c: Context) {
+        dir(c).listFiles()?.forEach { it.delete() }
+    }
+
     // ---- sharing ----
 
     fun uri(c: Context, file: File): Uri =

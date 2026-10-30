@@ -7,11 +7,13 @@ import android.text.InputFilter
 import android.text.InputType
 import android.text.TextWatcher
 import android.view.Gravity
+import android.view.View
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 
 /** First-launch Surya Saathi registration, and later "My Business Details". */
@@ -82,9 +84,19 @@ class ProfileActivity : AppCompatActivity() {
         form.addView(text("Your details are kept confidential with AVIP Business Solutions LLP.", 12f, Ui.MUTED) {
             gravity = Gravity.CENTER
         }, lp().margins(this, b = 16))
-        form.addView(grievanceCard(), lp().margins(this, b = 20))
+        form.addView(grievanceCard(), lp().margins(this, b = 4))
+        form.addView(privacyLink(), lp(WRAP, WRAP).apply { gravity = Gravity.CENTER_HORIZONTAL })
+        if (!firstRun) {
+            form.addView(text("Delete my account", 13.5f, Ui.DANGER, bold = true) {
+                gravity = Gravity.CENTER
+                setPadding(dp(12), dp(10), dp(12), dp(10))
+                setOnClickListener { confirmDelete() }
+            }, lp(WRAP, WRAP).margins(this, b = 20).apply { gravity = Gravity.CENTER_HORIZONTAL })
+        } else {
+            form.addView(View(this), lp(MATCH, dp(20)))
+        }
 
-        setContentView(root)
+        setEdgeContent(root)
         showGstStatus()
     }
 
@@ -110,6 +122,21 @@ class ProfileActivity : AppCompatActivity() {
                 }
             }
         }
+    }
+
+    private fun confirmDelete() {
+        AlertDialog.Builder(this)
+            .setTitle("Delete your account?")
+            .setMessage("This removes your registration and quotation records from AVIP Business Solutions LLP, and deletes your business details and saved quotations from this phone.\n\nYou can register again at any time.")
+            .setPositiveButton("Delete") { _, _ ->
+                Vendor.deleteAccount(this)
+                Toast.makeText(this, "Your account has been deleted", Toast.LENGTH_LONG).show()
+                startActivity(Intent(this, ProfileActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
+                finish()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     private fun save() {

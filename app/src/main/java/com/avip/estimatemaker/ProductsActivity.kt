@@ -75,7 +75,7 @@ class ProductsActivity : AppCompatActivity() {
         root.addView(ScrollView(this).apply { addView(list) }, lp(MATCH, 0, 1f))
         bar = cartBar()
         root.addView(bar)
-        setContentView(root)
+        setEdgeContent(root)
         render()
     }
 
