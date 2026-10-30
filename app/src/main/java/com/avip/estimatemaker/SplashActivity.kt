@@ -81,8 +81,9 @@ class SplashActivity : AppCompatActivity() {
                 elevation = dpf(6f)
             }, lp(dp(230), dp(230)))
             addView(text("B2B solar prices & quotations in seconds", 14f, 0xDDFFFFFF.toInt()) { gravity = Gravity.CENTER }, lp(WRAP, WRAP).margins(context, t = 20))
-            addView(text("by AVIP Business Solutions LLP", 12f, Ui.SUN, bold = true) { gravity = Gravity.CENTER }, lp(WRAP, WRAP).margins(context, t = 4))
         }
+        // Spacer above pushes the logo block to the middle; the footer sits at the bottom.
+        root.addView(View(this), lp(MATCH, 0, 1f))
         root.addView(brandBlock)
         progress = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
             isIndeterminate = true
@@ -95,7 +96,9 @@ class SplashActivity : AppCompatActivity() {
         root.addView(status, lp(WRAP, WRAP).margins(this, t = 10))
         retry = pillButton("Retry", Ui.SUN, Ui.TEXT) { start() }.apply { visibility = View.GONE }
         root.addView(retry, lp(dp(160), WRAP).margins(this, t = 16))
-        root.addView(text("v" + Updater.currentVersionName(this), 11f, 0x99FFFFFF.toInt()), lp(WRAP, WRAP).margins(this, t = 28))
+        root.addView(View(this), lp(MATCH, 0, 1f))
+        root.addView(text("by AVIP Business Solutions LLP", 14f, Ui.SUN, bold = true) { gravity = Gravity.CENTER }, lp(WRAP, WRAP))
+        root.addView(text("v" + Updater.currentVersionName(this), 11f, 0x99FFFFFF.toInt()), lp(WRAP, WRAP).margins(this, t = 4, b = 8))
         setContentView(root)
 
         brandBlock.alpha = 0f
