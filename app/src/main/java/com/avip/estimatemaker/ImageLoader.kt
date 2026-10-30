@@ -61,7 +61,7 @@ object ImageLoader {
                 conn.instanceFollowRedirects = false
                 conn.connectTimeout = 10000
                 conn.readTimeout = 20000
-                conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android) AVIP-Surya-Saathi")
+                conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android) Bihar-Solar-Circle")
                 conn.setRequestProperty("Accept", "image/*")
                 val code = conn.responseCode
                 if (code in 300..399 && hops < 5) {

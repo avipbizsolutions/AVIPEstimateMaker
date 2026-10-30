@@ -45,7 +45,7 @@ class ProfileActivity : AppCompatActivity() {
             form.addView(card {
                 addView(horizontal {
                     addView(iconBadge("kit", 44))
-                    addView(text("Become an AVIP Surya Saathi: get B2B prices for solar panels, inverters, batteries, structure, cables and more — and make PDF quotations in seconds.", 13.5f, Ui.TEXT), lp(0, WRAP, 1f).margins(context, l = 12))
+                    addView(text("Join Bihar Solar Circle as a Surya Saathi: get AVIP B2B prices for solar panels, inverters, batteries, structure, cables and more — and make PDF quotations in seconds.", 13.5f, Ui.TEXT), lp(0, WRAP, 1f).margins(context, l = 12))
                 })
             }, lp().margins(this, b = 14))
         }

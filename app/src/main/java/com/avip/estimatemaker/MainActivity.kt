@@ -41,7 +41,7 @@ class MainActivity : AppCompatActivity() {
             setPadding(dp(10), dp(10), dp(10), dp(10))
             setOnClickListener { startActivity(Intent(this@MainActivity, ProfileActivity::class.java)) }
         }
-        root.addView(topBar("AVIP Surya Saathi", "B2B Solar Price List", showBack = false,
+        root.addView(topBar("Bihar Solar Circle", "B2B Solar Price List by AVIP", showBack = false,
             right = listOf(refreshBtn, profileBtn, cartIcon)))
 
         content = vertical(14)

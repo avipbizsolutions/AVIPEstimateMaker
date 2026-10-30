@@ -1,10 +1,10 @@
-# AVIP Surya Saathi
+# Bihar Solar Circle
 
-Free Android app for **Surya Saathi** partners (PM Surya Ghar installers and solar businesses)
+Free Android app (by AVIP Business Solutions LLP) for **Surya Saathi** partners (PM Surya Ghar installers and solar businesses)
 to see AVIP Business Solutions LLP's B2B prices and create AVIP quotation PDFs in seconds.
 
 **Download the latest APK:**
-https://github.com/avipbizsolutions/AVIPEstimateMaker/releases/latest/download/AVIP-Surya-Saathi.apk
+https://github.com/avipbizsolutions/AVIPEstimateMaker/releases/latest/download/Bihar-Solar-Circle.apk
 
 ## What a Surya Saathi can do
 - Register once: company, contact person, mobile and **GSTIN (mandatory)**. The GSTIN is checked
