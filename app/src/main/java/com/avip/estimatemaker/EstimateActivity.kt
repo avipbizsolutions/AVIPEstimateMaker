@@ -17,7 +17,7 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
 
-/** Review items and create the AVIP quotation PDF. */
+/** Review items and create the AVIP cost estimate PDF. */
 class EstimateActivity : AppCompatActivity() {
 
     private lateinit var body: LinearLayout
@@ -28,18 +28,18 @@ class EstimateActivity : AppCompatActivity() {
         Cart.load(this)
         if (!Catalog.isLoaded) Catalog.loadCached(this)
 
-        val clear = text("Clear", 14f, Color.WHITE, bold = true) {
+        val clear = text(tr("Clear", "हटाएं"), 14f, Color.WHITE, bold = true) {
             setPadding(dp(12), dp(10), dp(12), dp(10))
             setOnClickListener {
                 if (Cart.count == 0) return@setOnClickListener
                 AlertDialog.Builder(this@EstimateActivity)
-                    .setMessage("Remove all items from this quotation?")
-                    .setPositiveButton("Clear") { _, _ -> Cart.clear(this@EstimateActivity); render() }
-                    .setNegativeButton("Cancel", null).show()
+                    .setMessage(tr("Remove all items from this cost estimate?", "इस अनुमान से सभी आइटम हटाएं?"))
+                    .setPositiveButton(tr("Clear", "हटाएं")) { _, _ -> Cart.clear(this@EstimateActivity); render() }
+                    .setNegativeButton(tr("Cancel", "रद्द करें"), null).show()
             }
         }
         val root = vertical()
-        root.addView(topBar("Your Quotation", "AVIP B2B rates for ${Vendor.company(this)}", right = listOf(clear)))
+        root.addView(topBar(tr("Your Cost Estimate", "आपका लागत अनुमान"), tr("AVIP B2B rates for ", "AVIP B2B रेट: ") + Vendor.company(this), right = listOf(clear)))
         body = vertical(14)
         root.addView(ScrollView(this).apply { addView(body) }, lp(MATCH, 0, 1f))
         totalsBox = vertical { setPadding(dp(16), dp(12), dp(16), dp(14)); setBackgroundColor(Color.WHITE); elevation = dpf(10f) }
@@ -53,7 +53,7 @@ class EstimateActivity : AppCompatActivity() {
     }
 
     private fun goShopping() {
-        startActivity(Intent(this, MainActivity::class.java)
+        startActivity(Intent(this, CatalogActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP))
     }
 
@@ -61,8 +61,8 @@ class EstimateActivity : AppCompatActivity() {
         body.removeAllViews()
 
         body.addView(horizontal {
-            addView(text("Items (${Cart.count})", 15f, Ui.TEXT, bold = true), lp(0, WRAP, 1f))
-            addView(text("+ Add products", 14f, Ui.BRAND, bold = true) {
+            addView(text(tr("Items", "आइटम") + " (${Cart.count})", 15f, Ui.TEXT, bold = true), lp(0, WRAP, 1f))
+            addView(text(tr("+ Add products", "+ प्रोडक्ट जोड़ें"), 14f, Ui.BRAND, bold = true) {
                 setPadding(dp(8), dp(6), dp(8), dp(6))
                 setOnClickListener { goShopping() }
             })
@@ -72,9 +72,9 @@ class EstimateActivity : AppCompatActivity() {
             body.addView(card(20) {
                 gravity = Gravity.CENTER_HORIZONTAL
                 addView(icon(R.drawable.ic_cart, Ui.MUTED, 40))
-                addView(text("No items yet", 16f, Ui.TEXT, bold = true), lp(WRAP, WRAP).margins(context, t = 8))
-                addView(text("Add products from the categories to build your quotation.", 13f, Ui.MUTED) { gravity = Gravity.CENTER })
-                addView(pillButton("Browse Products", Ui.BRAND) { goShopping() }, lp(WRAP, WRAP).margins(context, t = 14))
+                addView(text(tr("No items yet", "अभी कोई आइटम नहीं"), 16f, Ui.TEXT, bold = true), lp(WRAP, WRAP).margins(context, t = 8))
+                addView(text(tr("Add products from the categories to build your cost estimate.", "लागत अनुमान बनाने के लिए कैटेगरी से प्रोडक्ट जोड़ें।"), 13f, Ui.MUTED) { gravity = Gravity.CENTER })
+                addView(pillButton(tr("Browse Products", "प्रोडक्ट देखें"), Ui.BRAND) { goShopping() }, lp(WRAP, WRAP).margins(context, t = 14))
             })
         }
 
@@ -84,7 +84,7 @@ class EstimateActivity : AppCompatActivity() {
         if (Cart.count > 0) {
             body.addView(card(12) {
                 background = rounded(0xFFE8F3EC.toInt(), dpf(14f))
-                addView(text("This quotation is addressed to ${Vendor.company(context)} at AVIP B2B rates. To place the order, send the PDF to AVIP on WhatsApp.", 12.5f, Ui.BRAND_DARK))
+                addView(text(tr("This cost estimate is addressed to ${Vendor.company(context)} at AVIP B2B rates. To place the order, send the PDF to AVIP on WhatsApp.", "यह लागत अनुमान ${Vendor.company(context)} के लिए AVIP B2B रेट पर है। ऑर्डर देने के लिए PDF को WhatsApp पर AVIP को भेजें।"), 12.5f, Ui.BRAND_DARK))
             }, lp().margins(this, t = 8))
         }
         body.addView(View(this), lp(MATCH, dp(20)))
@@ -147,11 +147,11 @@ class EstimateActivity : AppCompatActivity() {
             addView(text(label, if (strong) 15f else 13f, if (strong) Ui.TEXT else Ui.MUTED, strong), lp(0, WRAP, 1f))
             addView(text(value, if (strong) 19f else 13f, if (strong) Ui.BRAND_DARK else Ui.TEXT, true))
         }
-        if (t.kwp > 0) totalsBox.addView(row("Panels total", "${Fmt.num(t.kwp)} kWp"))
-        totalsBox.addView(row("Sub total", Fmt.inr(t.subTotal, true)))
+        if (t.kwp > 0) totalsBox.addView(row(tr("Panels total", "कुल पैनल"), "${Fmt.num(t.kwp)} kWp"))
+        totalsBox.addView(row(tr("Sub total", "उप-योग"), Fmt.inr(t.subTotal, true)))
         totalsBox.addView(row("GST", Fmt.inr(t.gstTotal, true)))
-        totalsBox.addView(row("Grand total", Fmt.inr(t.grandTotal), strong = true), lp().margins(this, t = 4))
-        totalsBox.addView(pillButton("Create Quotation PDF", Ui.BRAND, Color.WHITE, 52) { createPdf() }, lp().margins(this, t = 10))
+        totalsBox.addView(row(tr("Grand total", "कुल राशि"), Fmt.inr(t.grandTotal), strong = true), lp().margins(this, t = 4))
+        totalsBox.addView(pillButton(tr("Create Cost Estimate PDF", "लागत अनुमान PDF बनाएं"), Ui.BRAND, Color.WHITE, 52) { createPdf() }, lp().margins(this, t = 10))
     }
 
     private fun createPdf() {
@@ -167,7 +167,7 @@ class EstimateActivity : AppCompatActivity() {
             val file = try {
                 withContext(Dispatchers.IO) { EstimateStore.save(this@EstimateActivity, doc) }
             } catch (e: Exception) {
-                Toast.makeText(this@EstimateActivity, "Couldn't create PDF: ${e.message}", Toast.LENGTH_LONG).show(); return@launch
+                Toast.makeText(this@EstimateActivity, tr("Couldn't create PDF: ", "PDF नहीं बना: ") + e.message, Toast.LENGTH_LONG).show(); return@launch
             }
             Remote.queue(this@EstimateActivity, JSONObject()
                 .put("kind", "estimate")
@@ -184,20 +184,20 @@ class EstimateActivity : AppCompatActivity() {
     }
 
     private fun showDone(doc: EstimateDoc, file: File) {
-        val msg = "Quotation ${doc.number} from AVIP Business Solutions LLP for ${Vendor.company(this)}"
+        val msg = "Cost estimate ${doc.number} from AVIP Business Solutions LLP for ${Vendor.company(this)}"
         val sheet = vertical(20) {
             addView(iconBadge("kit", 54).also { (it.layoutParams as LinearLayout.LayoutParams).gravity = Gravity.CENTER_HORIZONTAL })
-            addView(text("Quotation ready!", 20f, Ui.TEXT, bold = true) { gravity = Gravity.CENTER }, lp().margins(context, t = 10))
+            addView(text(tr("Cost estimate ready!", "लागत अनुमान तैयार!"), 20f, Ui.TEXT, bold = true) { gravity = Gravity.CENTER }, lp().margins(context, t = 10))
             addView(text("${doc.number} · ${Fmt.inr(doc.grandTotal)}", 13f, Ui.MUTED) { gravity = Gravity.CENTER }, lp().margins(context, b = 14))
         }
         val dialog = AlertDialog.Builder(this).setView(sheet).create()
-        sheet.addView(pillButton("Open PDF", Ui.BRAND) { EstimateStore.open(this, file) }, lp().margins(this, b = 8))
-        sheet.addView(pillButton("Send to AVIP on WhatsApp", 0xFF25D366.toInt()) {
+        sheet.addView(pillButton(tr("Open PDF", "PDF खोलें"), Ui.BRAND) { EstimateStore.open(this, file) }, lp().margins(this, b = 8))
+        sheet.addView(pillButton(tr("Send to AVIP on WhatsApp", "WhatsApp पर AVIP को भेजें"), 0xFF25D366.toInt()) {
             EstimateStore.whatsapp(this, file, Catalog.settings["whatsapp"],
-                "Hello AVIP, I am ${Vendor.contact(this)} from ${Vendor.company(this)}. Sharing quotation ${doc.number}. I need help regarding order placement.")
+                "Hello AVIP, I am ${Vendor.contact(this)} from ${Vendor.company(this)}. Sharing cost estimate ${doc.number}. I need help regarding order placement.")
         }, lp().margins(this, b = 8))
-        sheet.addView(pillButton("Share…", 0xFFEFF3F1.toInt(), Ui.TEXT) { EstimateStore.share(this, file, msg) }, lp().margins(this, b = 8))
-        sheet.addView(pillButton("New quotation", Color.WHITE, Ui.BRAND) {
+        sheet.addView(pillButton(tr("Share…", "भेजें…"), 0xFFEFF3F1.toInt(), Ui.TEXT) { EstimateStore.share(this, file, msg) }, lp().margins(this, b = 8))
+        sheet.addView(pillButton(tr("New cost estimate", "नया लागत अनुमान"), Color.WHITE, Ui.BRAND) {
             Cart.clear(this); dialog.dismiss(); render()
         }.apply { background = rounded(Color.WHITE, dpf(24f), Ui.BRAND, dp(1)) })
         dialog.show()

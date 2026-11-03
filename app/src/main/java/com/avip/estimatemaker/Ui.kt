@@ -242,7 +242,7 @@ fun Activity.cartBar(): View = horizontal {
     val summary = text("", 15f, Color.WHITE, bold = true)
     addView(summary, lp(0, WRAP, 1f).margins(context, l = 12))
     addView(TextView(context).apply {
-        text = "View Quotation  ›"
+        text = tr("View Estimate  ›", "अनुमान देखें  ›")
         setTextColor(Ui.TEXT)
         typeface = Typeface.DEFAULT_BOLD
         setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
@@ -253,7 +253,7 @@ fun Activity.cartBar(): View = horizontal {
     tag = Runnable {
         val n = Cart.count
         visibility = if (n > 0) View.VISIBLE else View.GONE
-        summary.text = "$n item${if (n == 1) "" else "s"} · ${Fmt.inr(Cart.totals().grandTotal)}"
+        summary.text = tr("$n item${if (n == 1) "" else "s"}", "$n आइटम") + " · ${Fmt.inr(Cart.totals().grandTotal)}"
     }
     (tag as Runnable).run()
 }
@@ -300,12 +300,12 @@ fun showPhoto(a: Activity, bitmap: android.graphics.Bitmap, title: String) {
     }
     val box = a.vertical {
         addView(iv, lp(MATCH, WRAP))
-        addView(a.text("Representative image", 11f, Ui.MUTED) { gravity = Gravity.CENTER }, lp().margins(a, b = 8))
+        addView(a.text(tr("Representative image", "सांकेतिक फ़ोटो"), 11f, Ui.MUTED) { gravity = Gravity.CENTER }, lp().margins(a, b = 8))
     }
     androidx.appcompat.app.AlertDialog.Builder(a)
         .setTitle(title)
         .setView(box)
-        .setPositiveButton("Close", null)
+        .setPositiveButton(tr("Close", "बंद करें"), null)
         .show()
 }
 
@@ -321,8 +321,8 @@ fun grievanceOfficers(): List<Pair<String, String>> {
 
 /** Card listing the Grievance Officers with tap-to-call buttons. */
 fun Activity.grievanceCard(): View = card {
-    addView(text("Grievance Officer", 15f, Ui.TEXT, bold = true))
-    addView(text("For any complaint or concern, contact:", 12.5f, Ui.MUTED), lp().margins(context, t = 2, b = 8))
+    addView(text(tr("Grievance Officer", "शिकायत अधिकारी"), 15f, Ui.TEXT, bold = true))
+    addView(text(tr("For any complaint or concern, contact:", "किसी भी शिकायत या समस्या के लिए संपर्क करें:"), 12.5f, Ui.MUTED), lp().margins(context, t = 2, b = 8))
     grievanceOfficers().forEach { (name, number) ->
         addView(horizontal {
             addView(icon(R.drawable.ic_person, Ui.BRAND, 20))
@@ -345,18 +345,59 @@ fun Activity.openWeb(url: String) {
     try {
         startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url)))
     } catch (_: Exception) {
-        android.widget.Toast.makeText(this, "No browser found to open $url", android.widget.Toast.LENGTH_LONG).show()
+        android.widget.Toast.makeText(this, tr("No browser found to open $url", "$url खोलने के लिए कोई browser नहीं मिला"), android.widget.Toast.LENGTH_LONG).show()
     }
 }
 
 /** Underlined "Privacy Policy" link (hidden until privacy_url is set). */
-fun Activity.privacyLink(): View = text("Privacy Policy", 13f, Ui.BRAND_DARK, bold = true) {
+fun Activity.privacyLink(): View = text(tr("Privacy Policy", "गोपनीयता नीति"), 13f, Ui.BRAND_DARK, bold = true) {
     paintFlags = paintFlags or android.graphics.Paint.UNDERLINE_TEXT_FLAG
     setPadding(dp(12), dp(10), dp(12), dp(10))
     val url = privacyUrl()
     visibility = if (url == null) View.GONE else View.VISIBLE
     setOnClickListener { url?.let { openWeb(it) } }
 }
+
+/**
+ * Big tappable tool tile for the home screen: coloured icon, title and one line of help.
+ * [badge] shows a small status label (e.g. "Linked") in the corner.
+ */
+fun Activity.toolCard(iconRes: Int, color: Int, title: String, subtitle: String, badge: String? = null, onClick: () -> Unit): View =
+    vertical(14) {
+        background = rounded(Color.WHITE, dpf(18f))
+        elevation = dpf(2f)
+        foreground = ripple()
+        minimumHeight = dp(132)
+        addView(horizontal {
+            addView(FrameLayout(context).apply {
+                background = rounded(color, dpf(14f))
+                addView(icon(iconRes, Color.WHITE, 26), FrameLayout.LayoutParams(dp(26), dp(26), Gravity.CENTER))
+            }, lp(dp(46), dp(46)))
+            addView(View(context), lp(0, 1, 1f))
+            if (badge != null) addView(text(badge, 10.5f, color, bold = true) {
+                background = rounded(0xFFF1F5F3.toInt(), dpf(10f))
+                setPadding(dp(8), dp(3), dp(8), dp(3))
+                maxLines = 1
+            })
+        })
+        addView(text(title, 15f, Ui.TEXT, bold = true) { maxLines = 2 }, lp().margins(context, t = 10))
+        addView(text(subtitle, 11.5f, Ui.MUTED) { maxLines = 3 }, lp().margins(context, t = 2))
+        setOnClickListener { onClick() }
+    }
+
+/** Two-column grid of tool tiles. */
+fun Activity.toolGrid(tiles: List<View>): View = android.widget.GridLayout(this).apply {
+    columnCount = 2
+    tiles.forEach { t ->
+        addView(t, android.widget.GridLayout.LayoutParams(
+            android.widget.GridLayout.spec(android.widget.GridLayout.UNDEFINED, 1f),
+            android.widget.GridLayout.spec(android.widget.GridLayout.UNDEFINED, 1f)
+        ).apply { width = 0; setMargins(dp(5), dp(5), dp(5), dp(5)) })
+    }
+}
+
+/** Section heading inside a screen. */
+fun Context.heading(t: String): View = text(t, 17f, Ui.TEXT, bold = true)
 
 private const val TOP_BAR = "top_bar"
 

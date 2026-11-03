@@ -12,7 +12,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-/** Saved quotations: open, share, edit again or delete. */
+/** Saved AVIP cost estimates: open, share, edit again or delete. */
 class HistoryActivity : AppCompatActivity() {
 
     private lateinit var list: LinearLayout
@@ -20,7 +20,7 @@ class HistoryActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val root = vertical()
-        root.addView(topBar("My Quotations", "Saved on this phone"))
+        root.addView(topBar(tr("My Cost Estimates", "मेरे लागत अनुमान"), tr("Saved on this phone", "इस फ़ोन में सेव")))
         list = vertical(14)
         root.addView(ScrollView(this).apply { addView(list) }, lp(MATCH, 0, 1f))
         setEdgeContent(root)
@@ -38,8 +38,8 @@ class HistoryActivity : AppCompatActivity() {
             list.addView(vertical {
                 gravity = Gravity.CENTER_HORIZONTAL
                 addView(icon(R.drawable.ic_pdf, Ui.MUTED, 48))
-                addView(text("No quotations yet", 16f, Ui.TEXT, bold = true), lp(WRAP, WRAP).margins(context, t = 10))
-                addView(text("PDFs you create will appear here.", 13f, Ui.MUTED))
+                addView(text(tr("No cost estimates yet", "अभी कोई लागत अनुमान नहीं"), 16f, Ui.TEXT, bold = true), lp(WRAP, WRAP).margins(context, t = 10))
+                addView(text(tr("PDFs you create will appear here.", "आपके बनाए PDF यहां दिखेंगे।"), 13f, Ui.MUTED))
             }, lp().margins(this, t = 80))
             return
         }
@@ -50,9 +50,9 @@ class HistoryActivity : AppCompatActivity() {
                 addView(horizontal {
                     addView(iconBadge("kit", 42, square = true))
                     addView(vertical {
-                        addView(text("AVIP Quotation", 15f, Ui.TEXT, bold = true))
+                        addView(text(tr("AVIP Cost Estimate", "AVIP लागत अनुमान"), 15f, Ui.TEXT, bold = true))
                         addView(text("${doc.number} · ${fmt.format(Date(doc.createdAt))}", 11.5f, Ui.MUTED))
-                        addView(text("${doc.lines.size} items", 11.5f, Ui.MUTED))
+                        addView(text(tr("${doc.lines.size} items", "${doc.lines.size} आइटम"), 11.5f, Ui.MUTED))
                     }, lp(0, WRAP, 1f).margins(context, l = 12))
                     addView(text(Fmt.inr(doc.grandTotal), 15f, Ui.BRAND_DARK, bold = true))
                 })
@@ -63,33 +63,33 @@ class HistoryActivity : AppCompatActivity() {
 
     private fun actions(doc: EstimateDoc) {
         val file = EstimateStore.pdfFile(this, doc.number)
-        val options = arrayOf("Open PDF", "Share PDF", "Edit as new quotation", "Delete")
+        val options = arrayOf(tr("Open PDF", "PDF खोलें"), tr("Share PDF", "PDF भेजें"), tr("Edit as new cost estimate", "नए अनुमान के रूप में बदलें"), tr("Delete", "मिटाएं"))
         AlertDialog.Builder(this)
             .setTitle(doc.number)
             .setItems(options) { _, which ->
                 when (which) {
                     0 -> if (file.exists()) EstimateStore.open(this, file) else missing()
-                    1 -> if (file.exists()) EstimateStore.share(this, file, "Quotation ${doc.number}") else missing()
+                    1 -> if (file.exists()) EstimateStore.share(this, file, "Cost estimate ${doc.number}") else missing()
                     2 -> {
                         val go = {
                             Cart.loadFrom(this, doc)
                             startActivity(Intent(this, EstimateActivity::class.java))
                         }
                         if (Cart.count > 0) AlertDialog.Builder(this)
-                            .setMessage("Replace the items in your current quotation?")
-                            .setPositiveButton("Replace") { _, _ -> go() }
-                            .setNegativeButton("Cancel", null).show()
+                            .setMessage(tr("Replace the items in your current cost estimate?", "मौजूदा अनुमान के आइटम बदल दें?"))
+                            .setPositiveButton(tr("Replace", "बदलें")) { _, _ -> go() }
+                            .setNegativeButton(tr("Cancel", "रद्द करें"), null).show()
                         else go()
                     }
                     3 -> AlertDialog.Builder(this)
-                        .setMessage("Delete ${doc.number}?")
-                        .setPositiveButton("Delete") { _, _ -> EstimateStore.delete(this, doc); render() }
-                        .setNegativeButton("Cancel", null).show()
+                        .setMessage(tr("Delete ${doc.number}?", "${doc.number} मिटाएं?"))
+                        .setPositiveButton(tr("Delete", "मिटाएं")) { _, _ -> EstimateStore.delete(this, doc); render() }
+                        .setNegativeButton(tr("Cancel", "रद्द करें"), null).show()
                 }
             }
             .show()
     }
 
-    private fun missing() = Toast.makeText(this, "PDF file not found", Toast.LENGTH_SHORT).show()
+    private fun missing() = Toast.makeText(this, tr("PDF file not found", "PDF फ़ाइल नहीं मिली"), Toast.LENGTH_SHORT).show()
 
 }

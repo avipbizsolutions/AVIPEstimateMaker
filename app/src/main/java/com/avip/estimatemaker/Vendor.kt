@@ -80,6 +80,9 @@ fun Vendor.deleteAccount(c: Context) {
         .clear().putString("install_id", keepId).apply()
     Cart.clear(c)
     EstimateStore.deleteAll(c)
+    SalesStore.deleteAll(c)
+    Business.clear(c)
+    DriveSync.unlink(c)
 }
 
 /**

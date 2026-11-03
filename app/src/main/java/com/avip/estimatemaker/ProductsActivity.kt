@@ -43,10 +43,10 @@ class ProductsActivity : AppCompatActivity() {
         val root = vertical()
         cartIcon = cartButton()
         val count = Catalog.products.count { category == null || it.category == category }
-        root.addView(topBar(category ?: "Search Products", if (category != null) "$count items · rates before GST" else "All categories", right = listOf(cartIcon)))
+        root.addView(topBar(category ?: tr("Search Products", "प्रोडक्ट खोजें"), if (category != null) tr("$count items · rates before GST", "$count आइटम · रेट GST से पहले") else tr("All categories", "सभी कैटेगरी"), right = listOf(cartIcon)))
 
         if (searchMode) {
-            val box = input("Type product, brand or size…", InputType.TYPE_CLASS_TEXT).apply {
+            val box = input(tr("Type product, brand or size…", "प्रोडक्ट, ब्रांड या साइज़ लिखें…"), InputType.TYPE_CLASS_TEXT).apply {
                 background = rounded(Color.WHITE, dpf(24f), Ui.LINE, dp(1))
                 setCompoundDrawablesRelativeWithIntrinsicBounds(R.drawable.ic_search, 0, 0, 0)
                 compoundDrawablePadding = dp(10)
@@ -104,7 +104,7 @@ class ProductsActivity : AppCompatActivity() {
         if (brands.size > 1) {
             (listOf<String?>(null) + brands).forEach { b ->
                 val selected = brand == b
-                chips.addView(text(b ?: "All brands", 13f, if (selected) Color.WHITE else Ui.TEXT, bold = selected) {
+                chips.addView(text(b ?: tr("All brands", "सभी ब्रांड"), 13f, if (selected) Color.WHITE else Ui.TEXT, bold = selected) {
                     background = rounded(if (selected) Ui.BRAND else Color.WHITE, dpf(18f), Ui.LINE, if (selected) 0 else dp(1))
                     setPadding(dp(14), dp(8), dp(14), dp(8))
                     setOnClickListener { brand = b; render() }
@@ -117,7 +117,7 @@ class ProductsActivity : AppCompatActivity() {
         val shown = items.filter { brand == null || it.brand == brand }
             .sortedBy { if (it.available) 0 else 1 }
         if (shown.isEmpty()) {
-            list.addView(text(if (category == null && query.isBlank()) "Start typing to search all products" else "No products found",
+            list.addView(text(if (category == null && query.isBlank()) tr("Start typing to search all products", "सभी प्रोडक्ट खोजने के लिए लिखना शुरू करें") else tr("No products found", "कोई प्रोडक्ट नहीं मिला"),
                 15f, Ui.MUTED) { gravity = Gravity.CENTER }, lp().margins(this, t = 60))
             return
         }
@@ -142,9 +142,9 @@ private val chosenVariant = mutableMapOf<String, String>()
 /** Label for the switch: "Packet", "Packet · 200pc", "Roll · 25mtr", "Loose · per pc",
  *  "Single panel" or "Pallet of 36". */
 private fun variantLabel(p: Product): String {
-    if (p.isLoose) return "Loose · per ${p.unit.lowercase()}"
-    if (p.isPallet) return "Pallet of ${p.minQty}"
-    if (p.unit.equals("Panel", true)) return "Single panel"
+    if (p.isLoose) return tr("Loose · per ${p.unit.lowercase()}", "खुला · प्रति ${p.unit.lowercase()}")
+    if (p.isPallet) return tr("Pallet of ${p.minQty}", "${p.minQty} का पैलेट")
+    if (p.unit.equals("Panel", true)) return tr("Single panel", "एक पैनल")
     val detail = Regex("\\(([^)]*)\\)\\s*$").find(p.name)?.groupValues?.get(1)?.trim() ?: ""
     return if (detail.isBlank() || detail.equals(p.unit, true) || detail.equals("packet", true)) p.unit
     else "${p.unit} · $detail"
@@ -173,7 +173,7 @@ fun variantCard(a: Activity, variants: List<Product>, onChange: () -> Unit): Vie
                 })
                 val price = v.unitPrice
                 val priceText = when {
-                    price == null -> "Rate on request"
+                    price == null -> tr("Rate on request", "रेट पूछें")
                     v.perWp && v.rate != null -> "₹${Fmt.num(v.rate)}/Wp · ${v.spec}"
                     else -> Fmt.inr(price, price < 100)
                 }
@@ -188,8 +188,8 @@ fun variantCard(a: Activity, variants: List<Product>, onChange: () -> Unit): Vie
         addView(switch)
         val otherText = other?.let {
             val q = Fmt.qty(Cart.qtyOf(it.id))
-            if (it.isPallet) "Also in quotation: $q panels at pallet rate"
-            else "Also in quotation: $q × ${variantLabel(it)}"
+            if (it.isPallet) tr("Also in estimate: $q panels at pallet rate", "अनुमान में पहले से: $q पैनल पैलेट रेट पर")
+            else tr("Also in estimate: $q × ${variantLabel(it)}", "अनुमान में पहले से: $q × ${variantLabel(it)}")
         }
         if (otherText != null) addView(text(otherText,
             11.5f, Ui.BRAND, bold = true), lp().margins(context, t = 6))
@@ -208,7 +208,7 @@ fun productCard(a: Activity, p: Product, title: String = p.name, extra: View? = 
                     letterSpacing = 0.06f
                 })
                 addView(text(title, 15f, Ui.TEXT, bold = true))
-                val sub = listOf(p.spec, "per ${p.unit.lowercase()}").filter { it.isNotBlank() }.joinToString(" · ")
+                val sub = listOf(p.spec, tr("per ", "प्रति ") + p.unit.lowercase()).filter { it.isNotBlank() }.joinToString(" · ")
                 addView(text(sub, 12f, Ui.MUTED), lp().margins(context, t = 2))
                 if (p.notes.isNotBlank() && p.available) addView(text(p.notes, 11.5f, 0xFFB26A00.toInt()), lp().margins(context, t = 2))
             }, lp(0, WRAP, 1f).margins(context, l = 12))
@@ -225,10 +225,10 @@ fun productCard(a: Activity, p: Product, title: String = p.name, extra: View? = 
                 addView(qtyControl(a, p, onChange))
             } else {
                 addView(vertical {
-                    addView(text("Rate on request", 15f, Ui.MUTED, bold = true))
-                    addView(text(if (p.inStock) "Price not listed right now" else "Currently not available", 11.5f, Ui.MUTED))
+                    addView(text(tr("Rate on request", "रेट पूछें"), 15f, Ui.MUTED, bold = true))
+                    addView(text(if (p.inStock) tr("Price not listed right now", "अभी रेट उपलब्ध नहीं") else tr("Currently not available", "अभी स्टॉक में नहीं"), 11.5f, Ui.MUTED))
                 }, lp(0, WRAP, 1f))
-                addView(pillButton("Ask AVIP", 0xFF25D366.toInt(), Color.WHITE, 38) {
+                addView(pillButton(tr("Ask AVIP", "AVIP से पूछें"), 0xFF25D366.toInt(), Color.WHITE, 38) {
                     EstimateStore.chatAvip(a, "Hello AVIP, please share the rate for ${p.title} ${p.spec}.")
                 })
             }
@@ -241,7 +241,7 @@ fun qtyControl(a: Activity, p: Product, onChange: () -> Unit): View = with(a) {
     val qty = Cart.qtyOf(p.id)
     val min = p.minQty.toDouble()
     if (qty <= 0) {
-        pillButton(if (p.minQty > 1) "ADD ${p.minQty}" else "ADD", Ui.SUN, Ui.TEXT, 40) {
+        pillButton(if (p.minQty > 1) tr("ADD ${p.minQty}", "${p.minQty} जोड़ें") else tr("ADD", "जोड़ें"), Ui.SUN, Ui.TEXT, 40) {
             Cart.setQty(a, p, min); onChange()
         }.apply { minWidth = dp(96) }
     } else horizontal {
@@ -264,16 +264,16 @@ fun qtyControl(a: Activity, p: Product, onChange: () -> Unit): View = with(a) {
 
 /** Dialog to type an exact quantity. */
 fun askQty(a: Activity, title: String, unit: String, current: Double, done: (Double) -> Unit) {
-    val box = a.input("Quantity", InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL, Fmt.qty(current))
+    val box = a.input(tr("Quantity", "मात्रा"), InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL, Fmt.qty(current))
     val wrap = a.vertical(20) { addView(box) }
     AlertDialog.Builder(a)
         .setTitle(title)
-        .setMessage("Enter quantity (${unit.lowercase()})")
+        .setMessage(tr("Enter quantity (${unit.lowercase()})", "मात्रा लिखें (${unit.lowercase()})"))
         .setView(wrap)
-        .setPositiveButton("OK") { _, _ ->
+        .setPositiveButton(tr("OK", "ठीक है")) { _, _ ->
             box.text.toString().toDoubleOrNull()?.let { if (it >= 0) done(it) }
         }
-        .setNegativeButton("Cancel", null)
+        .setNegativeButton(tr("Cancel", "रद्द करें"), null)
         .show()
     box.selectAll()
 }

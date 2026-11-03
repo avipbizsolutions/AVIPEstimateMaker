@@ -15,8 +15,8 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * Draws an AVIP quotation as an A4 PDF: AVIP letterhead, the Surya Saathi as
- * "Quotation to", item table with GST, bank details, godown and terms.
+ * Draws an AVIP cost estimate as an A4 PDF: AVIP letterhead, the Surya Saathi as
+ * "Cost estimate to", item table with GST, bank details, godown and terms.
  */
 class PdfMaker(private val context: Context) {
 
@@ -76,7 +76,7 @@ class PdfMaker(private val context: Context) {
         if (s["gstin"].isNotBlank()) hy = drawWrapped("GSTIN: ${s["gstin"]}", textLeft, hy, headWidth, paint(8.5f, ink, true), 11f)
 
         // Title block on the right
-        val title = "QUOTATION"
+        val title = "COST ESTIMATE"
         val tb = RectF(right - titleW, headTop, right, headTop + 62f)
         canvas.drawRoundRect(tb, 8f, 8f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = brand })
         canvas.drawText(title, tb.centerX(), tb.top + 21f, paint(15f, Color.WHITE, true, Paint.Align.CENTER))
@@ -91,7 +91,7 @@ class PdfMaker(private val context: Context) {
         y += 14f
 
         // ---------- To / For ----------
-        val toTitle = "Quotation to  ·  Surya Saathi"
+        val toTitle = "Cost estimate for  ·  Surya Saathi"
         val toLines = mutableListOf<String>()
         toLines += Vendor.company(context)
         toLines += listOf(Vendor.contact(context), "Mob: " + Vendor.mobile(context)).filter { it.isNotBlank() }.joinToString("  ·  ")

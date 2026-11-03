@@ -43,7 +43,7 @@ class SplashActivity : AppCompatActivity() {
                 setImageResource(R.drawable.bsc_logo)
                 elevation = dpf(6f)
             }, lp(dp(230), dp(230)))
-            addView(text("B2B solar prices & quotations in seconds", 14f, 0xDDFFFFFF.toInt()) { gravity = Gravity.CENTER }, lp(WRAP, WRAP).margins(context, t = 20))
+            addView(text(tr("B2B solar prices, estimates & GST invoices", "B2B सोलर रेट, अनुमान व GST इनवॉइस"), 14f, 0xDDFFFFFF.toInt()) { gravity = Gravity.CENTER }, lp(WRAP, WRAP).margins(context, t = 20))
         }
         // Spacer above pushes the logo block to the middle; the footer sits at the bottom.
         root.addView(View(this), lp(MATCH, 0, 1f))
@@ -55,9 +55,9 @@ class SplashActivity : AppCompatActivity() {
             max = 100
         }
         root.addView(progress, lp(dp(200), WRAP).margins(this, t = 36))
-        status = text("Loading latest prices…", 13f, 0xDDFFFFFF.toInt()) { gravity = Gravity.CENTER }
+        status = text(tr("Loading latest prices…", "नए रेट लोड हो रहे हैं…"), 13f, 0xDDFFFFFF.toInt()) { gravity = Gravity.CENTER }
         root.addView(status, lp(WRAP, WRAP).margins(this, t = 10))
-        retry = pillButton("Retry", Ui.SUN, Ui.TEXT) { start() }.apply { visibility = View.GONE }
+        retry = pillButton(tr("Retry", "फिर से कोशिश करें"), Ui.SUN, Ui.TEXT) { start() }.apply { visibility = View.GONE }
         root.addView(retry, lp(dp(160), WRAP).margins(this, t = 16))
         root.addView(View(this), lp(MATCH, 0, 1f))
         root.addView(text("by AVIP Business Solutions LLP", 14f, Ui.SUN, bold = true) { gravity = Gravity.CENTER }, lp(WRAP, WRAP))
@@ -74,7 +74,7 @@ class SplashActivity : AppCompatActivity() {
         val versionCode = AppInfo.versionCode(this)
         val lastSeen = prefs.getLong("last_version_code", 0L)
         if (lastSeen in 1 until versionCode) {
-            Toast.makeText(this, "Updated to version ${AppInfo.versionName(this)}", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, tr("Updated to version ", "नया वर्ज़न: ") + AppInfo.versionName(this), Toast.LENGTH_LONG).show()
         }
         prefs.edit().putLong("last_version_code", versionCode).apply()
 
@@ -83,7 +83,7 @@ class SplashActivity : AppCompatActivity() {
 
     fun start() {
         retry.visibility = View.GONE
-        status.text = "Loading latest prices…"
+        status.text = tr("Loading latest prices…", "नए रेट लोड हो रहे हैं…")
         progress.visibility = View.VISIBLE
         progress.isIndeterminate = true
         val hadCache = Catalog.isLoaded || Catalog.loadCached(this)
@@ -93,16 +93,17 @@ class SplashActivity : AppCompatActivity() {
             val update = async { updates.fetchLatest() }
             val fresh = withTimeoutOrNull(10000) { Catalog.refresh(this@SplashActivity) } ?: false
             Remote.flushAsync(this@SplashActivity)
+            launch { Directory.refreshAll(this@SplashActivity) }
 
             if (updates.offer(update.await())) return@launch
             minimum.await()
             if (!fresh && !hadCache) {
                 progress.visibility = View.GONE
-                status.text = "Couldn't load prices. Check your internet connection."
+                status.text = tr("Couldn't load prices. Check your internet connection.", "रेट लोड नहीं हुए। इंटरनेट कनेक्शन जांचें।")
                 retry.visibility = View.VISIBLE
                 return@launch
             }
-            if (!fresh) toast("Offline: showing prices saved earlier")
+            if (!fresh) toast(tr("Offline: showing prices saved earlier", "ऑफ़लाइन: पहले सेव किए रेट दिख रहे हैं"))
             goNext()
         }
     }

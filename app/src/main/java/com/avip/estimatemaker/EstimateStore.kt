@@ -23,11 +23,11 @@ object EstimateStore {
     fun pdfFile(c: Context, number: String) = File(dir(c), safe(number) + ".pdf")
     private fun jsonFile(c: Context, number: String) = File(dir(c), safe(number) + ".json")
 
-    /** e.g. AQ-261014-03 */
+    /** e.g. CE-261014-03 (older ones: AQ-…) */
     fun nextNumber(c: Context): String {
         val p = c.getSharedPreferences("numbers", Context.MODE_PRIVATE)
         val day = SimpleDateFormat("yyMMdd", Locale.ENGLISH).format(Date())
-        val key = "AQ-$day"
+        val key = "CE-$day"
         val n = p.getInt(key, 0) + 1
         p.edit().putInt(key, n).apply()
         return "$key-${n.toString().padStart(2, '0')}"
@@ -66,7 +66,7 @@ object EstimateStore {
         try {
             a.startActivity(i)
         } catch (_: ActivityNotFoundException) {
-            Toast.makeText(a, "No PDF viewer found. Use Share instead.", Toast.LENGTH_LONG).show()
+            Toast.makeText(a, tr("No PDF viewer found. Use Share instead.", "PDF देखने का ऐप नहीं मिला। भेजें (Share) का उपयोग करें।"), Toast.LENGTH_LONG).show()
         }
     }
 
@@ -75,12 +75,13 @@ object EstimateStore {
             .putExtra(Intent.EXTRA_STREAM, uri(a, file))
             .putExtra(Intent.EXTRA_TEXT, message)
             .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        a.startActivity(Intent.createChooser(i, "Share quotation"))
+        a.startActivity(Intent.createChooser(i, tr("Share", "भेजें")))
     }
 
     /** Sends the PDF straight to a WhatsApp chat (falls back to the share sheet). */
     fun whatsapp(a: Activity, file: File, number: String, message: String) {
-        val digits = number.filter { it.isDigit() }
+        var digits = number.filter { it.isDigit() }
+        if (digits.length == 10) digits = "91$digits"
         for (pkg in listOf("com.whatsapp", "com.whatsapp.w4b")) {
             val i = Intent(Intent.ACTION_SEND).setType("application/pdf")
                 .setPackage(pkg)
@@ -104,7 +105,19 @@ object EstimateStore {
         try {
             a.startActivity(i)
         } catch (_: ActivityNotFoundException) {
-            Toast.makeText(a, "WhatsApp not found", Toast.LENGTH_SHORT).show()
+            Toast.makeText(a, tr("WhatsApp not found", "WhatsApp नहीं मिला"), Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    /** Opens a WhatsApp chat with any Indian mobile number and a typed message. */
+    fun chatNumber(a: Activity, number: String, message: String) {
+        var digits = number.filter { it.isDigit() }
+        if (digits.length == 10) digits = "91$digits"
+        val i = Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/$digits?text=" + Uri.encode(message)))
+        try {
+            a.startActivity(i)
+        } catch (_: ActivityNotFoundException) {
+            Toast.makeText(a, tr("WhatsApp not found", "WhatsApp नहीं मिला"), Toast.LENGTH_SHORT).show()
         }
     }
 

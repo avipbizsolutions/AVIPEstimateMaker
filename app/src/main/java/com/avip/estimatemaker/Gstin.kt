@@ -8,7 +8,7 @@ object Gstin {
     private const val CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
     private val PATTERN = Regex("^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$")
 
-    private val STATES = mapOf(
+    val STATES = mapOf(
         "01" to "Jammu & Kashmir", "02" to "Himachal Pradesh", "03" to "Punjab",
         "04" to "Chandigarh", "05" to "Uttarakhand", "06" to "Haryana", "07" to "Delhi",
         "08" to "Rajasthan", "09" to "Uttar Pradesh", "10" to "Bihar", "11" to "Sikkim",
@@ -24,11 +24,11 @@ object Gstin {
     /** Null when valid, otherwise a short reason to show the user. */
     fun problem(raw: String): String? {
         val g = raw.trim().uppercase()
-        if (g.isEmpty()) return "GST number is required"
-        if (g.length != 15) return "GSTIN must be 15 characters (you entered ${g.length})"
-        if (!PATTERN.matches(g)) return "This doesn't look like a GSTIN (format: 10ABCDE1234F1Z5)"
-        if (g.substring(0, 2) !in STATES) return "Unknown state code ${g.substring(0, 2)}"
-        if (checkDigit(g.substring(0, 14)) != g[14]) return "GSTIN check digit doesn't match — please re-check the number"
+        if (g.isEmpty()) return tr("GST number is required", "GST नंबर ज़रूरी है")
+        if (g.length != 15) return tr("GSTIN must be 15 characters (you entered ${g.length})", "GSTIN 15 अक्षर का होना चाहिए (आपने ${g.length} लिखे)")
+        if (!PATTERN.matches(g)) return tr("This doesn't look like a GSTIN (format: 10ABCDE1234F1Z5)", "यह GSTIN जैसा नहीं लगता (सही रूप: 10ABCDE1234F1Z5)")
+        if (g.substring(0, 2) !in STATES) return tr("Unknown state code ${g.substring(0, 2)}", "अज्ञात राज्य कोड ${g.substring(0, 2)}")
+        if (checkDigit(g.substring(0, 14)) != g[14]) return tr("GSTIN check digit doesn't match — please re-check the number", "GSTIN का आखिरी अंक मेल नहीं खाता — नंबर दोबारा जांचें")
         return null
     }
 
