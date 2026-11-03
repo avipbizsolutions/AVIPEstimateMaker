@@ -338,10 +338,8 @@ fun Activity.grievanceCard(): View = card {
     }
 }
 
-/** Privacy policy page (App Settings → privacy_url can point it elsewhere). */
-fun privacyUrl(): String =
-    Catalog.settings["privacy_url"].takeIf { it.startsWith("https://") }
-        ?: "https://avipsolar.in/bihar-solar-circle-privacy-policy/"
+/** Privacy policy page from App Settings → privacy_url; blank = no link shown. */
+fun privacyUrl(): String? = Catalog.settings["privacy_url"].takeIf { it.startsWith("https://") }
 
 fun Activity.openWeb(url: String) {
     try {
@@ -351,11 +349,13 @@ fun Activity.openWeb(url: String) {
     }
 }
 
-/** Underlined "Privacy Policy" link. */
+/** Underlined "Privacy Policy" link (hidden until privacy_url is set). */
 fun Activity.privacyLink(): View = text("Privacy Policy", 13f, Ui.BRAND_DARK, bold = true) {
     paintFlags = paintFlags or android.graphics.Paint.UNDERLINE_TEXT_FLAG
     setPadding(dp(12), dp(10), dp(12), dp(10))
-    setOnClickListener { openWeb(privacyUrl()) }
+    val url = privacyUrl()
+    visibility = if (url == null) View.GONE else View.VISIBLE
+    setOnClickListener { url?.let { openWeb(it) } }
 }
 
 private const val TOP_BAR = "top_bar"
