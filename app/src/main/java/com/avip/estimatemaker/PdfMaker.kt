@@ -91,13 +91,15 @@ class PdfMaker(private val context: Context) {
         y += 14f
 
         // ---------- To / For ----------
-        val toTitle = "Cost estimate for  ·  Surya Saathi"
+        val buyer = est.buyer ?: Buyer.ofSaathi(context)
+        val toTitle = if (est.madeBy.isNotBlank()) "Cost estimate for  ·  B2B customer" else "Cost estimate for  ·  Surya Saathi"
         val toLines = mutableListOf<String>()
-        toLines += Vendor.company(context)
-        toLines += listOf(Vendor.contact(context), "Mob: " + Vendor.mobile(context)).filter { it.isNotBlank() }.joinToString("  ·  ")
-        val place = listOf(Vendor.address(context), Vendor.city(context)).filter { it.isNotBlank() }.joinToString(", ")
+        toLines += buyer.company
+        toLines += listOf(buyer.contact, if (buyer.mobile.isNotBlank()) "Mob: " + buyer.mobile else "").filter { it.isNotBlank() }.joinToString("  ·  ")
+        val place = listOf(buyer.address, buyer.city).filter { it.isNotBlank() }.joinToString(", ")
         if (place.isNotBlank()) toLines += place
-        if (Vendor.gst(context).isNotBlank()) toLines += "GSTIN: ${Vendor.gst(context)}"
+        if (buyer.gst.isNotBlank()) toLines += "GSTIN: ${buyer.gst}"
+        if (est.madeBy.isNotBlank()) toLines += "Prepared by: ${est.madeBy}, AVIP Business Solutions LLP"
         val boxTop = y
         val half = (right - margin - 12f) / 2f
         var ly = boxTop + 14f

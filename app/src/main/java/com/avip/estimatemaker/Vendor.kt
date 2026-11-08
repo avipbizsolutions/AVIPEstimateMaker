@@ -8,7 +8,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.util.UUID
 
-/** The Surya Saathi (partner) using this phone. Filled once on first launch; editable later. */
+/** The logged-in Surya Saathi (B2B customer): details as kept in AVIP's "Surya Saathi" tab. */
 object Vendor {
     private const val PREFS = "vendor"
 
@@ -32,32 +32,21 @@ object Vendor {
         }
     }
 
-    fun save(
-        c: Context, company: String, contact: String, mobile: String,
-        gst: String, city: String, address: String,
-    ) {
+    /** Keeps the Saathi's details from the office on the phone (after login / profile change). */
+    fun store(c: Context, profile: JSONObject) {
         prefs(c).edit()
             .putBoolean("registered", true)
-            .putString("company", company)
-            .putString("contact", contact)
-            .putString("mobile", mobile)
-            .putString("gst", gst)
-            .putString("city", city)
-            .putString("address", address)
+            .putString("company", profile.optString("company"))
+            .putString("contact", profile.optString("contact"))
+            .putString("mobile", profile.optString("mobile"))
+            .putString("gst", profile.optString("gst"))
+            .putString("city", profile.optString("city"))
+            .putString("address", profile.optString("address"))
+            .putLong("since", profile.optLong("since"))
             .apply()
-        Remote.queue(
-            c, JSONObject()
-                .put("kind", "saathi")
-                .put("company", company)
-                .put("contact", contact)
-                .put("mobile", mobile)
-                .put("gst", gst)
-                .put("city", city)
-                .put("installId", installId(c))
-                .put("device", "${Build.MANUFACTURER} ${Build.MODEL}")
-                .put("appVersion", AppInfo.versionName(c))
-        )
     }
+
+    fun since(c: Context) = prefs(c).getLong("since", 0L)
 }
 
 /**
@@ -83,6 +72,7 @@ fun Vendor.deleteAccount(c: Context) {
     SalesStore.deleteAll(c)
     Business.clear(c)
     DriveSync.unlink(c)
+    Session.logout(c)
 }
 
 /**

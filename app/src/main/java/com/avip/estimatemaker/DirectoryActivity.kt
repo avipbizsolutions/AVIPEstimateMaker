@@ -147,15 +147,15 @@ class DirectoryActivity : AppCompatActivity() {
     }
 
     private fun message(e: Directory.Entry): String {
-        val me = Vendor.contact(this)
-        val co = Vendor.company(this)
+        val me = Session.myName(this)
+        val co = Session.myCompany(this)
         val first = e.name.substringBefore(' ')
         return if (installers) tr(
-            "Namaste $first ji, I am $me from $co (Surya Saathi, Bihar Solar Circle). I need a team for solar installation.",
-            "नमस्ते $first जी, मैं $co से $me (सूर्य साथी, Bihar Solar Circle) बोल रहा हूं। मुझे सोलर इंस्टॉलेशन के लिए टीम चाहिए।")
+            "Namaste $first ji, I am $me from $co (${if (Session.isTeam(this)) "AVIP" else "Surya Saathi, Bihar Solar Circle"}). I need a team for solar installation.",
+            "नमस्ते $first जी, मैं $co से $me (${if (Session.isTeam(this)) "AVIP" else "सूर्य साथी, Bihar Solar Circle"}) बोल रहा हूं। मुझे सोलर इंस्टॉलेशन के लिए टीम चाहिए।")
         else tr(
-            "Namaste $first ji, I am $me from $co (Surya Saathi, Bihar Solar Circle). I need a ${e.vehicleType.ifBlank { "vehicle" }.lowercase()} for solar material delivery.",
-            "नमस्ते $first जी, मैं $co से $me (सूर्य साथी, Bihar Solar Circle) बोल रहा हूं। मुझे सोलर सामान ढुलाई के लिए ${e.vehicleType.ifBlank { "गाड़ी" }} चाहिए।")
+            "Namaste $first ji, I am $me from $co (${if (Session.isTeam(this)) "AVIP" else "Surya Saathi, Bihar Solar Circle"}). I need a ${e.vehicleType.ifBlank { "vehicle" }.lowercase()} for solar material delivery.",
+            "नमस्ते $first जी, मैं $co से $me (${if (Session.isTeam(this)) "AVIP" else "सूर्य साथी, Bihar Solar Circle"}) बोल रहा हूं। मुझे सोलर सामान ढुलाई के लिए ${e.vehicleType.ifBlank { "गाड़ी" }} चाहिए।")
     }
 }
 

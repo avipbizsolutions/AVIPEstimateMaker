@@ -124,8 +124,42 @@ class SplashActivity : AppCompatActivity() {
         if (leaving || isFinishing) return
         if (!Catalog.isLoaded) { start(); return }
         leaving = true
-        val next = if (Vendor.isComplete(this)) MainActivity::class.java else ProfileActivity::class.java
-        startActivity(Intent(this, next))
+        when (Session.kind(this)) {
+            Session.Kind.TEAM, Session.Kind.SAATHI ->
+                open(if (Session.mustSetPin(this)) SetPinActivity::class.java else MainActivity::class.java)
+            Session.Kind.NONE ->
+                if (Vendor.isComplete(this)) moveToLogin() else open(LoginActivity::class.java)
+        }
+    }
+
+    /**
+     * Registered on this phone before logins existed: create the login once (PIN 1234,
+     * then they set their own). Until the office script is updated, or when offline,
+     * they keep using the app as before and this is tried again on the next launch.
+     */
+    private fun moveToLogin() {
+        showStatus(tr("Setting up your login…", "आपका लॉगिन तैयार हो रहा है…"))
+        lifecycleScope.launch {
+            try {
+                val o = Api.call(this@SplashActivity, "register", org.json.JSONObject()
+                    .put("company", Vendor.company(this@SplashActivity)).put("contact", Vendor.contact(this@SplashActivity))
+                    .put("mobile", Vendor.mobile(this@SplashActivity)).put("gst", Vendor.gst(this@SplashActivity))
+                    .put("city", Vendor.city(this@SplashActivity)).put("address", Vendor.address(this@SplashActivity)))
+                Session.saveSaathi(this@SplashActivity, o.getString("token"), o.getJSONObject("profile"), true)
+                open(SetPinActivity::class.java)
+            } catch (e: ApiException) {
+                when (e.code) {
+                    "NET", "SETUP" -> open(MainActivity::class.java)
+                    else -> startActivity(Intent(this@SplashActivity, LoginActivity::class.java)
+                        .putExtra(LoginActivity.EXTRA_MOBILE, Vendor.mobile(this@SplashActivity))
+                        .putExtra(LoginActivity.EXTRA_MESSAGE, e.message)).also { finish() }
+                }
+            }
+        }
+    }
+
+    private fun open(cls: Class<*>) {
+        startActivity(Intent(this, cls))
         @Suppress("DEPRECATION")
         overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
         finish()

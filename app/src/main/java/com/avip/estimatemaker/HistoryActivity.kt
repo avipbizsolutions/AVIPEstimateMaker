@@ -50,7 +50,7 @@ class HistoryActivity : AppCompatActivity() {
                 addView(horizontal {
                     addView(iconBadge("kit", 42, square = true))
                     addView(vertical {
-                        addView(text(tr("AVIP Cost Estimate", "AVIP लागत अनुमान"), 15f, Ui.TEXT, bold = true))
+                        addView(text(doc.buyer?.takeIf { Session.isTeam(this@HistoryActivity) }?.company ?: tr("AVIP Cost Estimate", "AVIP लागत अनुमान"), 15f, Ui.TEXT, bold = true))
                         addView(text("${doc.number} · ${fmt.format(Date(doc.createdAt))}", 11.5f, Ui.MUTED))
                         addView(text(tr("${doc.lines.size} items", "${doc.lines.size} आइटम"), 11.5f, Ui.MUTED))
                     }, lp(0, WRAP, 1f).margins(context, l = 12))
@@ -72,6 +72,7 @@ class HistoryActivity : AppCompatActivity() {
                     1 -> if (file.exists()) EstimateStore.share(this, file, "Cost estimate ${doc.number}") else missing()
                     2 -> {
                         val go = {
+                            if (Session.isTeam(this)) doc.buyer?.let { TeamTarget.set(this, it) }
                             Cart.loadFrom(this, doc)
                             startActivity(Intent(this, EstimateActivity::class.java))
                         }

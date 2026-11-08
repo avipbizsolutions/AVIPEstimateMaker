@@ -76,6 +76,7 @@ object Cart {
             any = lines.removeAll { l -> Catalog.byId(l.productId)?.available != true }
         }
         lines.forEach { l ->
+            if (l.special) return@forEach
             val p = Catalog.byId(l.productId) ?: return@forEach
             val price = p.unitPrice ?: return@forEach
             if (price != l.price || p.gst != l.gst) {
@@ -89,6 +90,7 @@ object Cart {
     fun loadFrom(context: Context, doc: EstimateDoc) {
         lines.clear()
         lines += doc.lines.filter { it.productId != null }.map { it.copy() }
+            .onEach { if (!Session.isTeam(context)) it.special = false }
         reprice(context)
         changed(context)
     }

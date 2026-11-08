@@ -82,8 +82,11 @@ data class Line(
     var wp: Double,
     var minQty: Double,
     val icon: String,
+    /** AVIP Team set a special rate: fresh sheet prices don't overwrite it. */
+    var special: Boolean = false,
 ) {
     fun toJson(): JSONObject = JSONObject()
+        .put("special", special)
         .put("key", key).put("productId", productId ?: JSONObject.NULL)
         .put("name", name).put("spec", spec).put("unit", unit)
         .put("price", price).put("gst", gst).put("qty", qty)
@@ -102,6 +105,7 @@ data class Line(
             wp = o.optDouble("wp", 0.0),
             minQty = o.optDouble("minQty", 1.0),
             icon = o.optString("icon", "other"),
+            special = o.optBoolean("special", false),
         )
 
         fun fromProduct(p: Product, qty: Double) = Line(
@@ -126,8 +130,13 @@ data class EstimateDoc(
     val createdAt: Long,
     val lines: List<Line>,
     val grandTotal: Double,
+    /** Who it is for (null on older ones = the Surya Saathi on this phone). */
+    val buyer: Buyer? = null,
+    /** AVIP team member who prepared it; blank when the Saathi made it. */
+    val madeBy: String = "",
 ) {
     fun toJson(): JSONObject = JSONObject()
+        .put("buyer", buyer?.toJson() ?: JSONObject.NULL).put("madeBy", madeBy)
         .put("number", number).put("createdAt", createdAt).put("grandTotal", grandTotal)
         .put("lines", JSONArray().apply { lines.forEach { put(it.toJson()) } })
 
@@ -139,6 +148,8 @@ data class EstimateDoc(
                 createdAt = o.optLong("createdAt"),
                 lines = (0 until arr.length()).map { Line.fromJson(arr.getJSONObject(it)) },
                 grandTotal = o.optDouble("grandTotal", 0.0),
+                buyer = if (o.isNull("buyer")) null else Buyer.fromJson(o.optJSONObject("buyer")),
+                madeBy = o.optString("madeBy"),
             )
         }
     }

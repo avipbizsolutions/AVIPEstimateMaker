@@ -43,11 +43,29 @@ Installers and transporters come from two separate sheets (both *Anyone with the
 be added or reordered. To use other sheets, put their links in App Settings → `installers_sheet` /
 `transporters_sheet`.
 
-## Sign-up & quotation logging (one-time setup)
-1. Open the sheet → Extensions → Apps Script → paste `apps-script/Code.gs` → Save.
-2. Deploy → New deployment → Web app → Execute as **Me**, access **Anyone** → Deploy.
-   (When updating an existing deployment: Deploy → Manage deployments → Edit → Version: New version.)
-3. Paste the `/exec` URL into **App Settings → saathi_log_url**.
+## Logins
+- **Surya Saathi (B2B customer):** registers in the app (company, contact, mobile, GSTIN, city,
+  address) and logs in with mobile + 4-digit PIN. The default PIN is **1234** and must be changed
+  at first login. Every registration and login is recorded in the **Surya Saathi** tab (device,
+  Android and app version, last login, number of logins). In that tab AVIP can set **Status** to
+  *Blocked* to stop someone, or tick **Reset PIN** (PIN goes back to 1234; they set a new one at
+  the next login). PINs are stored scrambled. 5 wrong PINs lock the number for 15 minutes.
+  Phones registered before logins existed get their login automatically once (PIN 1234).
+- **AVIP Team:** Managers (Sales App Role *Manager*) and Founders (Expense *Admin*) in the
+  **AVIP Team Directory** log in with their common AVIP mobile + PIN. They see: New Cost Estimate
+  (pick a Surya Saathi or add a new B2B customer, set special rates, send the PDF to the customer),
+  Cost Estimates I made, Surya Saathis list, Installers and Transporters. Every estimate goes to
+  **Quotations Log** with **Made By** and **Special Rates**.
+
+## Office script (one-time setup, and after every change of apps-script/)
+1. Open the price sheet → Extensions → Apps Script. Paste `apps-script/Code.gs` over Code.gs, and add
+   a second file **AuthClient.gs** with `apps-script/AuthClient.gs`. Save.
+2. Project Settings (⚙) → Script properties → add **AUTH_URL** and **AUTH_KEY**: the same two values
+   as in the AVIP Solar Sales script (Sales CRM Dashboard → Apps Script → Project Settings).
+3. Select the function **setup** → Run → allow access. The log shows how many team members can log in.
+4. Deploy → Manage deployments → ✏ Edit → Version: **New version** → Deploy (the URL stays the same).
+   First time only: Deploy → New deployment → Web app, Execute as **Me**, access **Anyone**, and put
+   the `/exec` URL in **App Settings → saathi_log_url**.
 
 ## Google Drive setup (one time, by AVIP)
 Surya Saathis link their own Drive; Google only allows this once the app is registered:

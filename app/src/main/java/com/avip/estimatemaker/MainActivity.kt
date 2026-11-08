@@ -11,6 +11,7 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
+import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -39,7 +40,9 @@ class MainActivity : AppCompatActivity() {
             setPadding(dp(10), dp(10), dp(10), dp(10))
             setOnClickListener { startActivity(Intent(this@MainActivity, ProfileActivity::class.java)) }
         }
-        root.addView(topBar("Bihar Solar Circle", tr("B2B Solar Tools by AVIP", "AVIP के B2B सोलर टूल्स"), showBack = false,
+        root.addView(topBar("Bihar Solar Circle",
+            if (Session.isTeam(this)) tr("AVIP Team", "AVIP टीम") + " · " + Session.teamName(this) + " (" + Session.teamRoleLabel(this) + ")"
+            else tr("B2B Solar Tools by AVIP", "AVIP के B2B सोलर टूल्स"), showBack = false,
             right = listOf(langToggle(), refreshBtn, profileBtn, cartIcon)))
 
         content = vertical(14)
@@ -50,6 +53,24 @@ class MainActivity : AppCompatActivity() {
         build()
         refreshAll(false)
         Store.onHomeOpened(this)
+        checkLogin()
+    }
+
+    /** Still allowed in? (PIN reset, blocked or removed in the sheet / directory → login again.) */
+    private fun checkLogin() {
+        lifecycleScope.launch {
+            try {
+                if (Session.isTeam(this@MainActivity)) {
+                    Api.call(this@MainActivity, "teamMe", JSONObject().put("token", Session.token(this@MainActivity)))
+                } else if (Session.isSaathi(this@MainActivity)) {
+                    val o = Api.call(this@MainActivity, "me", JSONObject().put("token", Session.token(this@MainActivity)))
+                    o.optJSONObject("profile")?.let { Vendor.store(this@MainActivity, it) }
+                    if (o.optBoolean("mustSetPin")) startActivity(Intent(this@MainActivity, SetPinActivity::class.java))
+                }
+            } catch (e: ApiException) {
+                if (e.code in listOf("SESSION", "BLOCKED", "NOTEAM")) goLogin(this@MainActivity, e.message)
+            }
+        }
     }
 
     override fun onResume() {
@@ -93,9 +114,11 @@ class MainActivity : AppCompatActivity() {
         content.addView(vertical(16) {
             background = gradient(dpf(18f), 0xFF0B5A33.toInt(), 0xFF14935A.toInt())
             elevation = dpf(3f)
-            val first = Vendor.contact(context).substringBefore(' ').ifBlank { "Surya Saathi" }
+            val team = Session.isTeam(context)
+            val first = Session.myName(context).substringBefore(' ').ifBlank { "Surya Saathi" }
             addView(text(tr("Namaste, $first 👋", "नमस्ते, $first 👋"), 20f, Color.WHITE, bold = true))
-            addView(text("Surya Saathi · " + Vendor.company(context), 13f, 0xDDFFFFFF.toInt()), lp().margins(context, t = 2))
+            addView(text(if (team) "AVIP Team · " + Session.teamRoleLabel(context) else "Surya Saathi · " + Vendor.company(context),
+                13f, 0xDDFFFFFF.toInt()), lp().margins(context, t = 2))
             val updated = s["price_last_updated"].ifBlank {
                 SimpleDateFormat("d MMM yyyy", Locale.ENGLISH).format(Date(Catalog.updatedAt))
             }
@@ -132,6 +155,41 @@ class MainActivity : AppCompatActivity() {
 
         // Tools
         content.addView(heading(tr("My Tools", "मेरे टूल्स")), lp().margins(this, t = 20, b = 8))
+        if (Session.isTeam(this)) {
+            SaathiDirectory.loadCached(this)
+            val target = TeamTarget.get(this)
+            val n = SaathiDirectory.list.count { it.status.equals("Active", true) }
+            content.addView(toolGrid(listOf(
+                toolCard(R.drawable.ic_cart, Ui.BRAND,
+                    tr("New Cost Estimate", "नया लागत अनुमान"),
+                    tr("For a B2B customer, at AVIP rates", "B2B ग्राहक के लिए, AVIP रेट पर"),
+                    badge = if (Cart.count > 0 && target != null) tr("${Cart.count} items", "${Cart.count} आइटम") else null) {
+                    if (Cart.count > 0 && target != null) open(EstimateActivity::class.java)
+                    else open(SaathiListActivity::class.java) { putExtra(SaathiListActivity.EXTRA_PICK, true) }
+                },
+                toolCard(R.drawable.ic_history, 0xFF00897B.toInt(),
+                    tr("Cost Estimates I made", "मेरे बनाए लागत अनुमान"),
+                    tr("Open, share or edit saved estimates", "सेव किए अनुमान खोलें, भेजें या बदलें")) {
+                    open(HistoryActivity::class.java)
+                },
+                toolCard(R.drawable.ic_person, 0xFF1565C0.toInt(),
+                    tr("Surya Saathis", "सूर्य साथी"),
+                    if (n > 0) tr("$n active B2B customers", "$n सक्रिय B2B ग्राहक") else tr("Registered B2B customers", "रजिस्टर्ड B2B ग्राहक")) {
+                    open(SaathiListActivity::class.java)
+                },
+                toolCard(R.drawable.ic_tools, 0xFFEF6C00.toInt(),
+                    tr("Find Installers", "इंस्टॉलर खोजें"),
+                    tr("${Directory.installers.size} installers · call or WhatsApp", "${Directory.installers.size} इंस्टॉलर · कॉल या WhatsApp")) {
+                    open(DirectoryActivity::class.java) { putExtra(DirectoryActivity.EXTRA_KIND, Directory.Kind.INSTALLERS.name) }
+                },
+                toolCard(R.drawable.ic_truck, 0xFF546E7A.toInt(),
+                    tr("Transporters", "ट्रांसपोर्टर"),
+                    tr("${Directory.transporters.size} pickups & tempos", "${Directory.transporters.size} पिकअप व टेम्पो")) {
+                    open(DirectoryActivity::class.java) { putExtra(DirectoryActivity.EXTRA_KIND, Directory.Kind.TRANSPORTERS.name) }
+                },
+            )), lp().margins(this, l = -5, r = -5, b = 20))
+            return
+        }
         val quotes = SalesStore.count(this, SaleType.QUOTE)
         val invoices = SalesStore.count(this, SaleType.INVOICE)
         val installers = Directory.installers.size
