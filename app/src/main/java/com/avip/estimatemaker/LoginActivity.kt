@@ -137,8 +137,8 @@ class LoginActivity : AppCompatActivity() {
         if (busy) return
         val m = mobile.text.toString().filter { it.isDigit() }
         val p = pin.text.toString()
-        if (!Regex("[6-9][0-9]{9}").matches(m)) { mobile.errorView = tr("Enter a valid 10-digit mobile", "सही 10 अंकों का मोबाइल लिखें"); mobile.requestFocus(); return }
-        if (!Regex("[0-9]{4}").matches(p)) { pin.errorView = tr("Enter your 4-digit PIN", "अपना 4 अंकों का PIN लिखें"); pin.requestFocus(); return }
+        if (!Regex("[6-9][0-9]{9}").matches(m)) { mobile.error = tr("Enter a valid 10-digit mobile", "सही 10 अंकों का मोबाइल लिखें"); mobile.requestFocus(); return }
+        if (!Regex("[0-9]{4}").matches(p)) { pin.error = tr("Enter your 4-digit PIN", "अपना 4 अंकों का PIN लिखें"); pin.requestFocus(); return }
         busy = true
         errorView.text = ""
         loginBtn.text = tr("Logging in…", "लॉगिन हो रहा है…")

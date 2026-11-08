@@ -82,11 +82,11 @@ class SetPinActivity : AppCompatActivity() {
         val b = pin2.text.toString()
         errorView.text = ""
         when {
-            !Regex("[0-9]{4}").matches(a) -> { pin1.errorView = tr("4 digits", "4 अंक"); return }
-            a == "1234" -> { pin1.errorView = tr("Choose a PIN other than 1234", "1234 के अलावा कोई PIN चुनें"); return }
+            !Regex("[0-9]{4}").matches(a) -> { pin1.error = tr("4 digits", "4 अंक"); return }
+            a == "1234" -> { pin1.error = tr("Choose a PIN other than 1234", "1234 के अलावा कोई PIN चुनें"); return }
             a.toSet().size == 1 || a in listOf("0123", "1234", "2345", "3456", "4567", "5678", "6789", "9876", "4321") ->
-                { pin1.errorView = tr("Too easy to guess — choose another", "बहुत आसान है — कोई दूसरा चुनें"); return }
-            a != b -> { pin2.errorView = tr("PINs don't match", "PIN मेल नहीं खाते"); return }
+                { pin1.error = tr("Too easy to guess — choose another", "बहुत आसान है — कोई दूसरा चुनें"); return }
+            a != b -> { pin2.error = tr("PINs don't match", "PIN मेल नहीं खाते"); return }
         }
         busy = true
         saveBtn.text = tr("Saving…", "सेव हो रहा है…")
