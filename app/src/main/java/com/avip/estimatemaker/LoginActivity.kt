@@ -31,7 +31,7 @@ class LoginActivity : AppCompatActivity() {
     private lateinit var tabs: LinearLayout
     private lateinit var mobile: EditText
     private lateinit var pin: EditText
-    private lateinit var error: TextView
+    private lateinit var errorView: TextView
     private lateinit var loginBtn: TextView
     private lateinit var saathiLinks: LinearLayout
     private lateinit var teamNote: TextView
@@ -87,8 +87,8 @@ class LoginActivity : AppCompatActivity() {
                     }
                 })
             })
-            error = text(intent.getStringExtra(EXTRA_MESSAGE) ?: "", 12.5f, Ui.DANGER)
-            addView(error, lp().margins(context, t = 8))
+            errorView = text(intent.getStringExtra(EXTRA_MESSAGE) ?: "", 12.5f, Ui.DANGER)
+            addView(errorView, lp().margins(context, t = 8))
             loginBtn = pillButton(tr("Login", "लॉगिन"), Ui.BRAND, Color.WHITE, 52) { login() }
             addView(loginBtn, lp().margins(context, t = 12))
 
@@ -126,7 +126,7 @@ class LoginActivity : AppCompatActivity() {
                 gravity = Gravity.CENTER
                 setPadding(0, dp(10), 0, dp(10))
                 background = if (on) rounded(Ui.BRAND, dpf(20f)) else null
-                setOnClickListener { team = isTeam; error.text = ""; showTabs() }
+                setOnClickListener { team = isTeam; errorView.text = ""; showTabs() }
             }, lp(0, WRAP, 1f))
         }
         saathiLinks.visibility = if (team) View.GONE else View.VISIBLE
@@ -137,10 +137,10 @@ class LoginActivity : AppCompatActivity() {
         if (busy) return
         val m = mobile.text.toString().filter { it.isDigit() }
         val p = pin.text.toString()
-        if (!Regex("[6-9][0-9]{9}").matches(m)) { mobile.error = tr("Enter a valid 10-digit mobile", "सही 10 अंकों का मोबाइल लिखें"); mobile.requestFocus(); return }
-        if (!Regex("[0-9]{4}").matches(p)) { pin.error = tr("Enter your 4-digit PIN", "अपना 4 अंकों का PIN लिखें"); pin.requestFocus(); return }
+        if (!Regex("[6-9][0-9]{9}").matches(m)) { mobile.errorView = tr("Enter a valid 10-digit mobile", "सही 10 अंकों का मोबाइल लिखें"); mobile.requestFocus(); return }
+        if (!Regex("[0-9]{4}").matches(p)) { pin.errorView = tr("Enter your 4-digit PIN", "अपना 4 अंकों का PIN लिखें"); pin.requestFocus(); return }
         busy = true
-        error.text = ""
+        errorView.text = ""
         loginBtn.text = tr("Logging in…", "लॉगिन हो रहा है…")
         lifecycleScope.launch {
             try {
@@ -156,8 +156,8 @@ class LoginActivity : AppCompatActivity() {
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
                 finish()
             } catch (e: ApiException) {
-                error.text = e.message
-                if (e.code == "NOTFOUND") error.text = e.message + "\n" + tr("Tap \"Register as Surya Saathi\" below.", "नीचे \"सूर्य साथी के रूप में रजिस्टर करें\" दबाएं।")
+                errorView.text = e.message
+                if (e.code == "NOTFOUND") errorView.text = e.message + "\n" + tr("Tap \"Register as Surya Saathi\" below.", "नीचे \"सूर्य साथी के रूप में रजिस्टर करें\" दबाएं।")
             } finally {
                 busy = false
                 loginBtn.text = tr("Login", "लॉगिन")

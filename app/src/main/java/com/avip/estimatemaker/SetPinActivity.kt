@@ -20,7 +20,7 @@ class SetPinActivity : AppCompatActivity() {
 
     private lateinit var pin1: EditText
     private lateinit var pin2: EditText
-    private lateinit var error: TextView
+    private lateinit var errorView: TextView
     private lateinit var saveBtn: TextView
     private var busy = false
     private var forced = false
@@ -42,7 +42,7 @@ class SetPinActivity : AppCompatActivity() {
         }
         pin1 = pinBox()
         pin2 = pinBox()
-        error = text("", 12.5f, Ui.DANGER)
+        errorView = text("", 12.5f, Ui.DANGER)
         saveBtn = pillButton(tr("Save & continue", "सेव करें और आगे बढ़ें"), Ui.BRAND) { save() }
         form.addView(card(18) {
             addView(iconBadge("kit", 46).also { (it.layoutParams as android.widget.LinearLayout.LayoutParams).gravity = Gravity.CENTER_HORIZONTAL })
@@ -56,7 +56,7 @@ class SetPinActivity : AppCompatActivity() {
             addView(pin1)
             addView(text(tr("Confirm new PIN", "नया PIN दोबारा"), 12.5f, Ui.BRAND_DARK, bold = true), lp().margins(context, t = 12, b = 6))
             addView(pin2)
-            addView(error, lp().margins(context, t = 8))
+            addView(errorView, lp().margins(context, t = 8))
             addView(saveBtn, lp().margins(context, t = 12))
         })
         if (forced) form.addView(text(tr("Logout", "लॉगआउट"), 13.5f, Ui.MUTED, bold = true) {
@@ -80,13 +80,13 @@ class SetPinActivity : AppCompatActivity() {
         if (busy) return
         val a = pin1.text.toString()
         val b = pin2.text.toString()
-        error.text = ""
+        errorView.text = ""
         when {
-            !Regex("[0-9]{4}").matches(a) -> { pin1.error = tr("4 digits", "4 अंक"); return }
-            a == "1234" -> { pin1.error = tr("Choose a PIN other than 1234", "1234 के अलावा कोई PIN चुनें"); return }
+            !Regex("[0-9]{4}").matches(a) -> { pin1.errorView = tr("4 digits", "4 अंक"); return }
+            a == "1234" -> { pin1.errorView = tr("Choose a PIN other than 1234", "1234 के अलावा कोई PIN चुनें"); return }
             a.toSet().size == 1 || a in listOf("0123", "1234", "2345", "3456", "4567", "5678", "6789", "9876", "4321") ->
-                { pin1.error = tr("Too easy to guess — choose another", "बहुत आसान है — कोई दूसरा चुनें"); return }
-            a != b -> { pin2.error = tr("PINs don't match", "PIN मेल नहीं खाते"); return }
+                { pin1.errorView = tr("Too easy to guess — choose another", "बहुत आसान है — कोई दूसरा चुनें"); return }
+            a != b -> { pin2.errorView = tr("PINs don't match", "PIN मेल नहीं खाते"); return }
         }
         busy = true
         saveBtn.text = tr("Saving…", "सेव हो रहा है…")
@@ -101,7 +101,7 @@ class SetPinActivity : AppCompatActivity() {
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
                 finish()
             } catch (e: ApiException) {
-                error.text = e.message
+                errorView.text = e.message
                 if (e.code == "SESSION" || e.code == "BLOCKED") goLogin(this@SetPinActivity, e.message)
             } finally {
                 busy = false
