@@ -50,7 +50,7 @@ object ImageLoader {
 
     private fun fetch(c: Context, url: String, maxPx: Int): Bitmap? {
         val dir = File(c.cacheDir, "photos").apply { mkdirs() }
-        val file = File(dir, md5(url))
+        val file = File(dir, md5("v2|$url")) // v2: new cropping rule, old crops are redone
         if (!file.exists() || file.length() == 0L) {
             val part = File(dir, file.name + ".part")
             var target = URL(direct(url))
@@ -122,6 +122,12 @@ object ImageLoader {
         val gbR = median(IntArray(bi.size) { rr[bi[it]] })
         val gbG = median(IntArray(bi.size) { gg[bi[it]] })
         val gbB = median(IntArray(bi.size) { bb[bi[it]] })
+        // A real-life photo (leaves, floor, wall…) has no plain background to cut the
+        // product out of: show the whole photo as a centred square instead of guessing.
+        val plainEdges = bi.count {
+            Math.abs(rr[it] - gbR) + Math.abs(gg[it] - gbG) + Math.abs(bb[it] - gbB) < 60
+        } >= bi.size * 0.75f
+        if (!plainEdges) return centreSquare(src, maxPx)
 
         // Local background: box blur (integral image) with a large radius.
         val rad = maxOf(4, Math.round(maxOf(sw, sh) / 5f))
@@ -250,6 +256,21 @@ object ImageLoader {
                 ((q.maxX + 2) / sc - sL) * k, ((q.maxY + 2) / sc - sT) * k, fill
             )
         }
+        src.recycle()
+        return result
+    }
+
+    /** Middle square of the photo, nothing added or cut out. */
+    private fun centreSquare(src: Bitmap, maxPx: Int): Bitmap {
+        val side = minOf(src.width, src.height)
+        val out = maxPx.coerceAtMost(600)
+        val result = Bitmap.createBitmap(out, out, Bitmap.Config.ARGB_8888)
+        android.graphics.Canvas(result).drawBitmap(
+            src,
+            android.graphics.Rect((src.width - side) / 2, (src.height - side) / 2, (src.width + side) / 2, (src.height + side) / 2),
+            android.graphics.RectF(0f, 0f, out.toFloat(), out.toFloat()),
+            android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG)
+        )
         src.recycle()
         return result
     }
