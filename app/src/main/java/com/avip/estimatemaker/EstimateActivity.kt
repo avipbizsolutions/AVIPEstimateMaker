@@ -133,7 +133,8 @@ class EstimateActivity : AppCompatActivity() {
                     val sub = listOf(l.spec, "GST ${Fmt.num(l.gst)}%").filter { it.isNotBlank() }.joinToString(" · ")
                     addView(text(sub, 12f, Ui.MUTED))
                     addView(horizontal {
-                        addView(text("${Fmt.inr(r.rate, r.rate < 100)} / ${l.unit.lowercase()}", 12.5f, if (l.special) 0xFFB26A00.toInt() else Ui.TEXT, bold = l.special))
+                        addView(text("${Fmt.inr(r.rate, r.rate < 100)} / ${l.unit.lowercase()}" +
+                            (if (l.wp > 0) "  (₹${Fmt.num(round2(r.rate / l.wp))}/Wp)" else ""), 12.5f, if (l.special) 0xFFB26A00.toInt() else Ui.TEXT, bold = l.special))
                         if (l.special) addView(text(tr("Special rate", "विशेष रेट"), 10.5f, 0xFFB26A00.toInt(), bold = true) {
                             background = rounded(0xFFFFF4E0.toInt(), dpf(8f))
                             setPadding(dp(6), dp(2), dp(6), dp(2))
@@ -197,14 +198,34 @@ class EstimateActivity : AppCompatActivity() {
 
     /** AVIP Team: set a special rate on one line (or go back to the sheet rate). */
     private fun specialRate(l: Line) {
-        val sheet = Catalog.byId(l.productId)?.unitPrice
-        val box = input(tr("Rate per ${l.unit.lowercase()} before GST", "प्रति ${l.unit.lowercase()} रेट (GST से पहले)"),
-            android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL, Fmt.num(l.price))
+        // Solar panels are priced per Wp: type the ₹/Wp rate, the panel price follows.
+        val perWp = l.wp > 0
+        val product = Catalog.byId(l.productId)
+        val sheet = if (perWp) product?.takeIf { it.perWp }?.rate else product?.unitPrice
+        val current = if (perWp) round2(l.price / l.wp) else l.price
+        val box = input(
+            if (perWp) tr("Rate per Wp before GST", "प्रति Wp रेट (GST से पहले)")
+            else tr("Rate per ${l.unit.lowercase()} before GST", "प्रति ${l.unit.lowercase()} रेट (GST से पहले)"),
+            android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL, Fmt.num(current))
+        val preview = text("", 13f, Ui.BRAND_DARK, bold = true)
+        fun showPreview() {
+            val v = box.text.toString().toDoubleOrNull()
+            preview.text = if (!perWp || v == null || v <= 0) ""
+            else "= ${Fmt.inr(round2(v * l.wp), true)} " + tr("per panel", "प्रति पैनल") + " (${Fmt.num(l.wp)} Wp)" +
+                (if (l.qty > 1) "  ·  ${Fmt.inr(round2(v * l.wp) * l.qty, true)} " + tr("for ${Fmt.qty(l.qty)} panels", "${Fmt.qty(l.qty)} पैनल के") else "")
+        }
+        box.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun afterTextChanged(s: android.text.Editable?) = showPreview()
+        })
         val form = vertical(18) {
             addView(text(l.name, 14f, Ui.TEXT, bold = true))
-            if (sheet != null) addView(text(tr("Sheet rate: ", "शीट रेट: ") + Fmt.inr(sheet, true), 12.5f, Ui.MUTED), lp().margins(context, b = 8))
+            if (sheet != null) addView(text(tr("Sheet rate: ", "शीट रेट: ") + Fmt.inr(sheet, true) + (if (perWp) " / Wp" else ""), 12.5f, Ui.MUTED), lp().margins(context, b = 8))
             addView(box)
+            if (perWp) addView(preview, lp().margins(context, t = 8))
         }
+        showPreview()
         val d = AlertDialog.Builder(this).setTitle(tr("Special rate", "विशेष रेट")).setView(form)
             .setPositiveButton(tr("Apply", "लागू करें"), null)
             .setNegativeButton(tr("Cancel", "रद्द करें"), null)
@@ -217,7 +238,7 @@ class EstimateActivity : AppCompatActivity() {
             d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
                 val v = box.text.toString().toDoubleOrNull()
                 if (v == null || v <= 0) { box.error = tr("Enter a rate", "रेट लिखें"); return@setOnClickListener }
-                l.price = v
+                l.price = if (perWp) round2(v * l.wp) else v
                 l.special = sheet == null || kotlin.math.abs(v - sheet) > 0.004
                 Cart.changed(this); render(); d.dismiss()
             }
