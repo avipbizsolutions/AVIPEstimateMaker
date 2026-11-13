@@ -103,6 +103,48 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /** "Browse Products": search bar + a scrollable row of categories. */
+    private fun productRibbon(): View = vertical {
+        addView(horizontal {
+            gravity = Gravity.CENTER_VERTICAL
+            addView(heading(tr("Browse Products", "प्रोडक्ट देखें")), lp(0, WRAP, 1f))
+            addView(text(tr("All categories ›", "सभी कैटेगरी ›"), 13.5f, Ui.BRAND, bold = true) {
+                setPadding(dp(8), dp(6), 0, dp(6))
+                setOnClickListener { open(CatalogActivity::class.java) }
+            })
+        }, lp().margins(context, t = 20, b = 8))
+        addView(horizontal {
+            background = rounded(Color.WHITE, dpf(24f), Ui.LINE, dp(1))
+            setPadding(dp(16), dp(11), dp(16), dp(11))
+            elevation = dpf(1f)
+            foreground = ripple()
+            addView(icon(R.drawable.ic_search, Ui.MUTED, 20))
+            addView(text(tr("Search product, brand or size…", "प्रोडक्ट, ब्रांड या साइज़ खोजें…"), 14.5f, 0xFF8A968F.toInt()), lp(0, WRAP, 1f).margins(context, l = 10))
+            setOnClickListener {
+                startActivity(Intent(context, ProductsActivity::class.java).putExtra(ProductsActivity.EXTRA_SEARCH, true))
+            }
+        })
+        val row = horizontal { setPadding(0, dp(10), dp(8), dp(4)) }
+        Catalog.categories().forEach { cat ->
+            row.addView(vertical(10) {
+                background = rounded(Color.WHITE, dpf(16f))
+                elevation = dpf(2f)
+                foreground = ripple()
+                addView(iconBadge(cat.icon, 40, square = true))
+                addView(text(cat.name, 12.5f, Ui.TEXT, bold = true) { maxLines = 2 }, lp().margins(context, t = 8))
+                addView(text(tr("${cat.availableCount} items", "${cat.availableCount} आइटम"), 11f, Ui.MUTED))
+                setOnClickListener {
+                    startActivity(Intent(context, ProductsActivity::class.java).putExtra(ProductsActivity.EXTRA_CATEGORY, cat.name))
+                }
+            }, lp(dp(116), dp(132)).margins(context, r = 10, t = 2, b = 6))
+        }
+        addView(android.widget.HorizontalScrollView(context).apply {
+            isHorizontalScrollBarEnabled = false
+            clipToPadding = false
+            addView(row)
+        })
+    }
+
     private fun open(cls: Class<*>, block: Intent.() -> Unit = {}) =
         startActivity(Intent(this, cls).apply(block))
 
@@ -156,6 +198,8 @@ class MainActivity : AppCompatActivity() {
         // Tools
         content.addView(heading(tr("My Tools", "मेरे टूल्स")), lp().margins(this, t = 20, b = 8))
         if (Session.isTeam(this)) {
+            // Product ribbon: look up products and rates without starting an estimate.
+            content.addView(productRibbon(), content.childCount - 1)
             SaathiDirectory.loadCached(this)
             val target = TeamTarget.get(this)
             val n = SaathiDirectory.list.count { it.status.equals("Active", true) }
