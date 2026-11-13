@@ -43,7 +43,7 @@ class SplashActivity : AppCompatActivity() {
                 setImageResource(R.drawable.bsc_logo)
                 elevation = dpf(6f)
             }, lp(dp(230), dp(230)))
-            addView(text(tr("B2B solar prices, estimates & GST invoices", "B2B सोलर रेट, अनुमान व GST इनवॉइस"), 14f, 0xDDFFFFFF.toInt()) { gravity = Gravity.CENTER }, lp(WRAP, WRAP).margins(context, t = 20))
+            addView(text(tr("B2B solar prices & cost estimates", "B2B सोलर रेट व लागत अनुमान"), 14f, 0xDDFFFFFF.toInt()) { gravity = Gravity.CENTER }, lp(WRAP, WRAP).margins(context, t = 20))
         }
         // Spacer above pushes the logo block to the middle; the footer sits at the bottom.
         root.addView(View(this), lp(MATCH, 0, 1f))

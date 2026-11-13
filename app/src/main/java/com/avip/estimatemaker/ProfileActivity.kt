@@ -61,7 +61,7 @@ class ProfileActivity : AppCompatActivity() {
             form.addView(card {
                 addView(horizontal {
                     addView(iconBadge("kit", 44))
-                    addView(text(tr("Join Bihar Solar Circle as a Surya Saathi: get AVIP B2B prices for solar panels, inverters, batteries, structure, cables and more, make customer quotations and GST invoices, and find installers and transporters.", "सूर्य साथी के रूप में Bihar Solar Circle से जुड़ें: Solar Panel, Inverter, Battery, Structure, Cable आदि के AVIP B2B रेट पाएं, ग्राहक कोटेशन व GST इनवॉइस बनाएं, और इंस्टॉलर व ट्रांसपोर्टर खोजें।"), 13.5f, Ui.TEXT), lp(0, WRAP, 1f).margins(context, l = 12))
+                    addView(text(tr("Join Bihar Solar Circle as a Surya Saathi: get AVIP B2B prices for solar panels, inverters, batteries, structure, cables and more, make cost estimates in seconds, and find installers and transporters.", "सूर्य साथी के रूप में Bihar Solar Circle से जुड़ें: Solar Panel, Inverter, Battery, Structure, Cable आदि के AVIP B2B रेट पाएं, तुरंत लागत अनुमान बनाएं, और इंस्टॉलर व ट्रांसपोर्टर खोजें।"), 13.5f, Ui.TEXT), lp(0, WRAP, 1f).margins(context, l = 12))
                 })
             }, lp().margins(this, b = 14))
         } else {

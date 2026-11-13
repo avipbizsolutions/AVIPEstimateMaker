@@ -79,7 +79,7 @@ class MainActivity : AppCompatActivity() {
         refreshCart()
         build()
         Remote.flushAsync(this)
-        DriveSync.syncPendingAsync(this)
+        if (Features.SALES_DOCS) DriveSync.syncPendingAsync(this)
     }
 
     override fun onPause() {
@@ -240,18 +240,9 @@ class MainActivity : AppCompatActivity() {
         val vehicles = Directory.transporters.size
         val drive = DriveSync.isLinked(this)
         val pending = if (drive) SalesStore.pendingDrive(this) else 0
-        content.addView(toolGrid(listOf(
-            toolCard(R.drawable.ic_cart, Ui.BRAND,
-                tr("AVIP Cost Estimate", "AVIP से लागत अनुमान"),
-                tr("See AVIP B2B rates and make a cost estimate PDF", "AVIP के B2B रेट देखें और लागत अनुमान PDF बनाएं"),
-                badge = if (Cart.count > 0) tr("${Cart.count} items", "${Cart.count} आइटम") else null) {
-                open(CatalogActivity::class.java)
-            },
-            toolCard(R.drawable.ic_history, 0xFF00897B.toInt(),
-                tr("My Cost Estimates", "मेरे लागत अनुमान"),
-                tr("Open, share or edit saved AVIP estimates", "सेव किए AVIP अनुमान खोलें, भेजें या बदलें")) {
-                open(HistoryActivity::class.java)
-            },
+        // Customer Quotation, GST Tax Invoice, Google Drive and My Business stay hidden
+        // until Features.SALES_DOCS is switched on.
+        val salesDocs = if (!Features.SALES_DOCS) emptyList() else listOf(
             toolCard(R.drawable.ic_quote, 0xFF1565C0.toInt(),
                 tr("Customer Quotation", "ग्राहक कोटेशन"),
                 tr("Your quotation to your own customer", "अपने ग्राहक के लिए अपना कोटेशन"),
@@ -263,18 +254,6 @@ class MainActivity : AppCompatActivity() {
                 tr("GST-compliant bill for your customer", "अपने ग्राहक के लिए GST नियमों वाला बिल"),
                 badge = if (invoices > 0) "$invoices" else null) {
                 open(SalesListActivity::class.java) { putExtra(SalesListActivity.EXTRA_TYPE, SaleType.INVOICE.name) }
-            },
-            toolCard(R.drawable.ic_tools, 0xFFEF6C00.toInt(),
-                tr("Find Installers", "इंस्टॉलर खोजें"),
-                if (installers > 0) tr("$installers installers · call or WhatsApp", "$installers इंस्टॉलर · कॉल या WhatsApp करें")
-                else tr("Solar installation teams near you", "आपके पास के सोलर इंस्टॉलेशन टीम")) {
-                open(DirectoryActivity::class.java) { putExtra(DirectoryActivity.EXTRA_KIND, Directory.Kind.INSTALLERS.name) }
-            },
-            toolCard(R.drawable.ic_truck, 0xFF546E7A.toInt(),
-                tr("Transporters", "ट्रांसपोर्टर"),
-                if (vehicles > 0) tr("$vehicles pickups & tempos for delivery", "सामान ढुलाई के लिए $vehicles पिकअप व टेम्पो")
-                else tr("Pickup & tempo for material delivery", "सामान ढुलाई के लिए पिकअप व टेम्पो")) {
-                open(DirectoryActivity::class.java) { putExtra(DirectoryActivity.EXTRA_KIND, Directory.Kind.TRANSPORTERS.name) }
             },
             toolCard(R.drawable.ic_cloud, 0xFF0F9D58.toInt(),
                 "Google Drive",
@@ -291,7 +270,32 @@ class MainActivity : AppCompatActivity() {
                 tr("Address, bank & invoice settings", "पता, बैंक व इनवॉइस सेटिंग")) {
                 open(BusinessActivity::class.java)
             },
-        )), lp().margins(this, l = -5, r = -5))
+        )
+        content.addView(toolGrid(listOf(
+            toolCard(R.drawable.ic_cart, Ui.BRAND,
+                tr("AVIP Cost Estimate", "AVIP से लागत अनुमान"),
+                tr("See AVIP B2B rates and make a cost estimate PDF", "AVIP के B2B रेट देखें और लागत अनुमान PDF बनाएं"),
+                badge = if (Cart.count > 0) tr("${Cart.count} items", "${Cart.count} आइटम") else null) {
+                open(CatalogActivity::class.java)
+            },
+            toolCard(R.drawable.ic_history, 0xFF00897B.toInt(),
+                tr("My Cost Estimates", "मेरे लागत अनुमान"),
+                tr("Open, share or edit saved AVIP estimates", "सेव किए AVIP अनुमान खोलें, भेजें या बदलें")) {
+                open(HistoryActivity::class.java)
+            },
+            toolCard(R.drawable.ic_tools, 0xFFEF6C00.toInt(),
+                tr("Find Installers", "इंस्टॉलर खोजें"),
+                if (installers > 0) tr("$installers installers · call or WhatsApp", "$installers इंस्टॉलर · कॉल या WhatsApp करें")
+                else tr("Solar installation teams near you", "आपके पास के सोलर इंस्टॉलेशन टीम")) {
+                open(DirectoryActivity::class.java) { putExtra(DirectoryActivity.EXTRA_KIND, Directory.Kind.INSTALLERS.name) }
+            },
+            toolCard(R.drawable.ic_truck, 0xFF546E7A.toInt(),
+                tr("Transporters", "ट्रांसपोर्टर"),
+                if (vehicles > 0) tr("$vehicles pickups & tempos for delivery", "सामान ढुलाई के लिए $vehicles पिकअप व टेम्पो")
+                else tr("Pickup & tempo for material delivery", "सामान ढुलाई के लिए पिकअप व टेम्पो")) {
+                open(DirectoryActivity::class.java) { putExtra(DirectoryActivity.EXTRA_KIND, Directory.Kind.TRANSPORTERS.name) }
+            },
+        ) + salesDocs), lp().margins(this, l = -5, r = -5))
 
         // Contact AVIP
         content.addView(card {

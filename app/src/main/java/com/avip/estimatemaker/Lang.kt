@@ -25,6 +25,12 @@ object Lang {
     }
 }
 
+/** Parts of the app that are switched off for now. */
+object Features {
+    /** Customer Quotation, GST Tax Invoice, Google Drive and My Business (hidden for now). */
+    const val SALES_DOCS = false
+}
+
 /** Picks the text for the current interface language. */
 fun tr(en: String, hi: String): String = if (Lang.hindi) hi else en
 
