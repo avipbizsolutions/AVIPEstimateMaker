@@ -122,7 +122,9 @@ object Catalog {
             if (loose.size == 1 && packs.size == 1 && (p.isLoose || p == packs[0])) return packs + loose
         }
         if (!p.isLoose) {
-            val brand = same.filter { it.brand == p.brand && !it.isLoose }
+            // Same brand and same panel size: Adani Topcon 625 Wp pairs with its own pallet
+            // rate, 620 Wp with its own.
+            val brand = same.filter { it.brand == p.brand && !it.isLoose && it.wp == p.wp }
             val singles = brand.filter { !it.isPallet }
             val pallets = brand.filter { it.isPallet }
             if (singles.size == 1 && pallets.size == 1) return singles + pallets
