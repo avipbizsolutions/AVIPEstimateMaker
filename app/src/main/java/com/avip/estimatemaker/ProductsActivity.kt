@@ -76,8 +76,9 @@ class ProductsActivity : AppCompatActivity(), PhotoEditor {
                 when (i) {
                     0 -> {
                         val f = File(cacheDir, "shared/photo_${System.currentTimeMillis()}.jpg").apply { parentFile?.mkdirs() }
-                        cameraUri = FileProvider.getUriForFile(this, "$packageName.files", f)
-                        takePhoto.launch(cameraUri)
+                        val u = FileProvider.getUriForFile(this, "$packageName.files", f)
+                        cameraUri = u
+                        takePhoto.launch(u)
                     }
                     1 -> pickPhoto.launch("image/*")
                     else -> AlertDialog.Builder(this)
