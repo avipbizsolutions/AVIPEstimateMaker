@@ -61,6 +61,8 @@ function doPost(e) {
     if (d.kind === 'profile') return reply(updateProfile(sheet, d));
     if (d.kind === 'addSaathi') return reply(addSaathi(sheet, d));
     if (d.kind === 'setPhoto') return reply(setPhoto(book, d));
+    if (d.kind === 'editSaathi') return reply(editSaathi(sheet, d));
+    if (d.kind === 'deleteSaathi') return reply(deleteSaathi(book, sheet, d));
 
     if (d.kind === 'saathi' || d.kind === 'vendor') {
       // Older app versions: details from a phone without login. Never touches the PIN.
@@ -295,6 +297,41 @@ function addSaathi(sheet, d) {
   writeRow(sheet, -1, row);
   return { ok: true, saathi: { company: row[1], contact: row[2], mobile: mobile, gst: row[4], city: row[5], address: row[8],
     registered: Date.now(), lastLogin: 0, status: 'Active', addedBy: row[15] } };
+}
+
+/** A manager corrects a Surya Saathi's details. A new mobile number resets the PIN to 1234. */
+function editSaathi(sheet, d) {
+  const u = teamUser({ token: d.token });
+  const rows = data(sheet);
+  const i = rows.findIndex(r => last10(r[3]) === last10(d.mobile));
+  if (i < 0) return { ok: false, error: 'This Surya Saathi is no longer in the sheet. Pull down to refresh the list.' };
+  const mobile = last10(d.newMobile || d.mobile);
+  if (!/^[6-9]\d{9}$/.test(mobile)) return { ok: false, error: 'Enter a valid 10-digit mobile number.' };
+  if (clean(d.company).length < 2) return { ok: false, error: 'Company name is required.' };
+  if (mobile !== last10(d.mobile) && rows.some((r, k) => k !== i && last10(r[3]) === mobile))
+    return { ok: false, error: 'ALREADY: Another Surya Saathi already has this mobile number.' };
+  const row = rows[i].slice();
+  const mobileChanged = mobile !== last10(row[3]);
+  row[1] = clean(d.company); row[2] = clean(d.contact); row[3] = mobile; row[4] = clean(d.gst).toUpperCase();
+  row[5] = clean(d.city); row[8] = clean(d.address, 300);
+  if (mobileChanged) { row[16] = pinHash_(mobile, DEFAULT_PIN); row[17] = true; }
+  writeRow(sheet, i, row);
+  return { ok: true, mobileChanged: mobileChanged, saathi: {
+    company: row[1], contact: row[2], mobile: mobile, gst: row[4], city: row[5], address: row[8],
+    registered: row[0] instanceof Date ? row[0].getTime() : 0, lastLogin: row[11] instanceof Date ? row[11].getTime() : 0,
+    status: String(row[13] || 'Active'), addedBy: String(row[15] || '') } };
+}
+
+/** A manager deletes a Surya Saathi: their row goes; their logged estimates stay as records. */
+function deleteSaathi(book, sheet, d) {
+  const u = teamUser({ token: d.token });
+  const mobile = last10(d.mobile);
+  const removed = deleteRows(sheet, r => last10(r[3]) === mobile);
+  if (!removed) return { ok: false, error: 'This Surya Saathi is no longer in the sheet.' };
+  let log = book.getSheetByName('Deletion Requests');
+  if (!log) { log = book.insertSheet('Deletion Requests'); log.appendRow(['Date', 'Source', 'Rows removed']); }
+  log.appendRow([new Date(), 'AVIP Team: ' + u.name + ' deleted ' + clean(d.company) + ' (' + mobile.slice(0, 2) + '******' + mobile.slice(-2) + ')', removed]);
+  return { ok: true };
 }
 
 // =====================================================================

@@ -21,6 +21,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 
@@ -398,6 +400,18 @@ fun Activity.toolGrid(tiles: List<View>): View = android.widget.GridLayout(this)
 
 /** Section heading inside a screen. */
 fun Context.heading(t: String): View = text(t, 17f, Ui.TEXT, bold = true)
+
+/** Pull down to refresh: wraps a scrolling view; [onRefresh] runs, then the spinner stops. */
+fun androidx.appcompat.app.AppCompatActivity.pullToRefresh(child: View, onRefresh: suspend () -> Unit): View =
+    androidx.swiperefreshlayout.widget.SwipeRefreshLayout(this).apply {
+        setColorSchemeColors(Ui.BRAND, Ui.SUN)
+        addView(child, android.view.ViewGroup.LayoutParams(MATCH, MATCH))
+        setOnRefreshListener {
+            lifecycleScope.launch {
+                try { onRefresh() } finally { isRefreshing = false }
+            }
+        }
+    }
 
 private const val TOP_BAR = "top_bar"
 

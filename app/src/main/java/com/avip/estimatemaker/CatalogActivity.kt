@@ -26,7 +26,7 @@ class CatalogActivity : AppCompatActivity() {
         root.addView(topBar(tr("AVIP Cost Estimate", "AVIP से लागत अनुमान"),
             tr("AVIP B2B rates · before GST", "AVIP B2B रेट · GST से पहले"), right = listOf(cartIcon)))
         content = vertical(14)
-        root.addView(ScrollView(this).apply { addView(content) }, lp(MATCH, 0, 1f))
+        root.addView(pullToRefresh(ScrollView(this).apply { addView(content) }) { Catalog.refresh(this); build() }, lp(MATCH, 0, 1f))
         bar = cartBar()
         root.addView(bar)
         setEdgeContent(root)

@@ -192,7 +192,7 @@ class ProductsActivity : AppCompatActivity(), PhotoEditor {
         })
 
         list = vertical(12)
-        root.addView(ScrollView(this).apply { addView(list) }, lp(MATCH, 0, 1f))
+        root.addView(pullToRefresh(ScrollView(this).apply { addView(list) }) { Catalog.refresh(this); render() }, lp(MATCH, 0, 1f))
         bar = cartBar()
         root.addView(bar)
         setEdgeContent(root)
@@ -219,7 +219,7 @@ class ProductsActivity : AppCompatActivity(), PhotoEditor {
         val items = source()
         // Brand chips
         chips.removeAllViews()
-        val brands = items.map { it.brand }.filter { it.isNotBlank() }.distinct()
+        val brands = items.map { it.brand }.filter { it.isNotBlank() }.distinct().sortedBy { it.lowercase() }
         if (brand != null && brand !in brands) brand = null
         if (brands.size > 1) {
             (listOf<String?>(null) + brands).forEach { b ->
@@ -234,8 +234,15 @@ class ProductsActivity : AppCompatActivity(), PhotoEditor {
         } else chips.visibility = View.GONE
 
         list.removeAllViews()
+        // Brand A → Z (no brand last); in search results, by category first so headings stay together.
+        val catOrder = Catalog.categories().map { it.name }
         val shown = items.filter { brand == null || it.brand == brand }
-            .sortedBy { if (it.available) 0 else 1 }
+            .sortedWith(compareBy<Product>(
+                { if (category == null) catOrder.indexOf(it.category) else 0 },
+                { if (it.brand.isBlank()) 1 else 0 },
+                { it.brand.lowercase() },
+                { if (it.available) 0 else 1 },
+            ))
         if (shown.isEmpty()) {
             list.addView(text(if (category == null && query.isBlank()) tr("Start typing to search all products", "सभी प्रोडक्ट खोजने के लिए लिखना शुरू करें") else tr("No products found", "कोई प्रोडक्ट नहीं मिला"),
                 15f, Ui.MUTED) { gravity = Gravity.CENTER }, lp().margins(this, t = 60))

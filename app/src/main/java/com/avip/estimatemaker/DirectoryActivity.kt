@@ -64,21 +64,23 @@ class DirectoryActivity : AppCompatActivity() {
         status = text("", 11.5f, Ui.MUTED) { setPadding(dp(16), dp(6), dp(16), 0) }
         root.addView(status)
         list = vertical(12)
-        root.addView(ScrollView(this).apply { addView(list) }, lp(MATCH, 0, 1f))
+        root.addView(pullToRefresh(ScrollView(this).apply { addView(list) }) { reload() }, lp(MATCH, 0, 1f))
         setEdgeContent(root)
         render()
         refresh()
     }
 
     private fun refresh() {
+        lifecycleScope.launch { reload() }
+    }
+
+    private suspend fun reload() {
         loading = true
         render()
-        lifecycleScope.launch {
-            val ok = Directory.refresh(this@DirectoryActivity, kind)
-            loading = false
-            render()
-            if (!ok) status.text = tr("Offline — showing the list saved earlier", "ऑफ़लाइन — पहले सेव की गई लिस्ट दिख रही है")
-        }
+        val ok = Directory.refresh(this, kind)
+        loading = false
+        render()
+        if (!ok) status.text = tr("Offline — showing the list saved earlier", "ऑफ़लाइन — पहले सेव की गई लिस्ट दिख रही है")
     }
 
     private fun render() {

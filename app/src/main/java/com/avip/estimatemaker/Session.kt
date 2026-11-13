@@ -194,6 +194,11 @@ object SaathiDirectory {
         false
     }
 
+    fun removed(c: Context, mobile: String) {
+        list = list.filter { it.mobile != mobile }
+        runCatching { file(c).writeText(JSONArray().apply { list.forEach { put(it.toJson()) } }.toString()) }
+    }
+
     fun added(c: Context, b: Buyer) {
         list = listOf(b) + list.filter { it.mobile != b.mobile }
         runCatching { file(c).writeText(JSONArray().apply { list.forEach { put(it.toJson()) } }.toString()) }

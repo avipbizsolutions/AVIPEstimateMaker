@@ -46,7 +46,7 @@ class MainActivity : AppCompatActivity() {
             right = listOf(langToggle(), refreshBtn, profileBtn, cartIcon)))
 
         content = vertical(14)
-        root.addView(ScrollView(this).apply { addView(content) }, lp(MATCH, 0, 1f))
+        root.addView(pullToRefresh(ScrollView(this).apply { addView(content) }) { reload(true) }, lp(MATCH, 0, 1f))
         bar = cartBar()
         root.addView(bar)
         setEdgeContent(root)
@@ -93,14 +93,18 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun refreshAll(manual: Boolean) {
-        lifecycleScope.launch {
-            val ok = Catalog.refresh(this@MainActivity)
-            Directory.refreshAll(this@MainActivity)
-            if (ok) { build(); refreshCart() } else build()
-            if (manual) Toast.makeText(this@MainActivity,
-                if (ok) tr("Prices updated", "रेट अपडेट हो गए") else tr("Offline — showing saved prices", "इंटरनेट नहीं — सेव किए रेट दिख रहे हैं"),
-                Toast.LENGTH_SHORT).show()
-        }
+        lifecycleScope.launch { reload(manual) }
+    }
+
+    /** Fresh prices, photos, installers, transporters (and for the team, the Surya Saathi list). */
+    private suspend fun reload(manual: Boolean) {
+        val ok = Catalog.refresh(this)
+        Directory.refreshAll(this)
+        if (Session.isTeam(this)) runCatching { SaathiDirectory.refresh(this) }
+        build(); refreshCart()
+        if (manual) Toast.makeText(this,
+            if (ok) tr("Prices updated", "रेट अपडेट हो गए") else tr("Offline — showing saved prices", "इंटरनेट नहीं — सेव किए रेट दिख रहे हैं"),
+            Toast.LENGTH_SHORT).show()
     }
 
     /** "Browse Products": search bar + a scrollable row of categories. */

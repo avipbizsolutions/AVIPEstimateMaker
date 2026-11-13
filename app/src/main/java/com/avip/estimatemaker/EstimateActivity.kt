@@ -41,7 +41,7 @@ class EstimateActivity : AppCompatActivity() {
         val root = vertical()
         root.addView(topBar(tr("Your Cost Estimate", "आपका लागत अनुमान"), tr("AVIP B2B rates for ", "AVIP B2B रेट: ") + buyer().company, right = listOf(clear)))
         body = vertical(14)
-        root.addView(ScrollView(this).apply { addView(body) }, lp(MATCH, 0, 1f))
+        root.addView(pullToRefresh(ScrollView(this).apply { addView(body) }) { Catalog.refresh(this); render() }, lp(MATCH, 0, 1f))
         totalsBox = vertical { setPadding(dp(16), dp(12), dp(16), dp(14)); setBackgroundColor(Color.WHITE); elevation = dpf(10f) }
         root.addView(totalsBox)
         setEdgeContent(root)

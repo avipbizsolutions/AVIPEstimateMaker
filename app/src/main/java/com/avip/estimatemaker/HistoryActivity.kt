@@ -22,7 +22,7 @@ class HistoryActivity : AppCompatActivity() {
         val root = vertical()
         root.addView(topBar(tr("My Cost Estimates", "मेरे लागत अनुमान"), tr("Saved on this phone", "इस फ़ोन में सेव")))
         list = vertical(14)
-        root.addView(ScrollView(this).apply { addView(list) }, lp(MATCH, 0, 1f))
+        root.addView(pullToRefresh(ScrollView(this).apply { addView(list) }) { render() }, lp(MATCH, 0, 1f))
         setEdgeContent(root)
     }
 
