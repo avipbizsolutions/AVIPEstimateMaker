@@ -18,6 +18,10 @@
  *    (First time: Deploy > New deployment > Web app, Execute as Me, access Anyone,
  *    and put the /exec URL in App Settings → saathi_log_url.)
  *
+ * Product photos ("Product Photos" tab): one row per product in App Prices, kept in step
+ * automatically (every 5 minutes, and from the "Bihar Solar Circle" menu). Paste a photo link
+ * in "Photo URL", or managers / founders set it from the app (saved in AVIP's Drive).
+ *
  * In the "Surya Saathi" tab AVIP can:
  *  • set Status to "Blocked" to stop a Saathi logging in (back to "Active" to allow);
  *  • tick "Reset PIN" — the PIN becomes 1234 and the Saathi sets a new one at next login.
@@ -56,6 +60,7 @@ function doPost(e) {
     if (d.kind === 'setPin') return reply(setPin(sheet, d));
     if (d.kind === 'profile') return reply(updateProfile(sheet, d));
     if (d.kind === 'addSaathi') return reply(addSaathi(sheet, d));
+    if (d.kind === 'setPhoto') return reply(setPhoto(book, d));
 
     if (d.kind === 'saathi' || d.kind === 'vendor') {
       // Older app versions: details from a phone without login. Never touches the PIN.
@@ -78,6 +83,9 @@ function doPost(e) {
         try { const u = teamUser({ token: d.teamToken }); madeBy = u.name + ' (AVIP ' + (isFounder(u) ? 'Founder' : 'Manager') + ')'; }
         catch (_) { madeBy = 'AVIP Team (login expired)'; }
       }
+      // The phone may resend after a slow reply: log each estimate number once.
+      const last = log.getLastRow();
+      if (last > 1 && log.getRange(2, 2, last - 1, 1).getValues().some(r => String(r[0]) === clean(d.number))) return reply({ ok: true, duplicate: true });
       log.appendRow([
         new Date(), clean(d.number), clean(d.company), clean(d.contact), last10(d.mobile),
         clean(d.gst), clean(d.items, 2000),
@@ -114,8 +122,15 @@ function doPost(e) {
 function setup() {
   const book = SpreadsheetApp.openById(SHEET_ID);
   saathiSheet(book);
+  fixSaathiRows_(book.getSheetByName('Surya Saathi'));
   ensureHeaders(book.getSheetByName('Quotations Log'), QUOTE_COLS);
   secret_();
+  // Product photos: build the product-wise list now, keep it in step every 5 minutes.
+  photoFolder_();
+  Logger.log(syncPhotos());
+  if (!ScriptApp.getProjectTriggers().some(t => t.getHandlerFunction() === 'syncPhotos')) {
+    ScriptApp.newTrigger('syncPhotos').timeBased().everyMinutes(5).create();
+  }
   try {
     Logger.log('Team login OK: ' + authUsers_(AUTH_APP).length + ' people in the AVIP Team Directory with Sales access.');
   } catch (e) {
@@ -325,8 +340,13 @@ function blankRow() { return SAATHI_COLS.map(() => ''); }
 function writeRow(sheet, i, row) {
   const r = row.slice(0, SAATHI_COLS.length);
   r[3] = "'" + last10(r[3]); // keep the mobile number as text
-  if (i < 0) sheet.appendRow(r);
-  else sheet.getRange(i + 2, 1, 1, r.length).setValues([r]);
+  if (i < 0) {
+    // First row with no mobile number (the tab has pre-filled Status / tick boxes further down).
+    const rows = data(sheet);
+    const free = rows.findIndex(x => !last10(x[3]) && !x[1]);
+    const at = free >= 0 ? free + 2 : Math.max(sheet.getLastRow(), 1) + 1;
+    sheet.getRange(at, 1, 1, r.length).setValues([r]);
+  } else sheet.getRange(i + 2, 1, 1, r.length).setValues([r]);
 }
 
 // Deletes data rows (below the header) that match; returns how many were removed.
@@ -338,6 +358,166 @@ function deleteRows(sheet, match) {
     if (match(rows[i])) { sheet.deleteRow(i + 2); n++; }
   }
   return n;
+}
+
+/** One-time tidy-up: moves registrations that landed far down (row 1000+) to the top. */
+function fixSaathiRows_(sheet) {
+  if (!sheet || sheet.getLastRow() < 2) return;
+  const all = sheet.getRange(2, 1, sheet.getLastRow() - 1, SAATHI_COLS.length).getValues();
+  const real = all.filter(r => last10(r[3]) || r[1]);
+  const blanks = all.length - real.length;
+  if (!blanks) return;
+  const out = real.concat(Array.from({ length: blanks }, () => SAATHI_COLS.map((c, k) => k === 13 ? 'Active' : k === 14 ? false : '')));
+  out.forEach(r => { if (last10(r[3])) r[3] = "'" + last10(r[3]); });
+  sheet.getRange(2, 1, out.length, SAATHI_COLS.length).setValues(out);
+}
+
+// =====================================================================
+// Product photos — one row per product, keyed by the App Prices ID
+// =====================================================================
+
+const PHOTO_COLS = ['Product ID', 'Photo URL', 'Preview', 'Category', 'Product', 'Brand', 'In Price List', 'Updated By', 'Updated On'];
+
+/** Shows the "Bihar Solar Circle" menu in the sheet. */
+function onOpen() {
+  SpreadsheetApp.getUi().createMenu('Bihar Solar Circle')
+    .addItem('Refresh product photo list', 'syncPhotosMenu')
+    .addToUi();
+}
+
+function syncPhotosMenu() { SpreadsheetApp.getActive().toast(syncPhotos(), 'Product photos'); }
+
+function photoKey_(product, brand) { return (String(product) + '|' + String(brand)).toLowerCase().replace(/\s+/g, ' ').trim(); }
+function words_(t) { return String(t).toLowerCase().split(/[^a-z0-9.]+/).map(w => w.replace(/^\.+|\.+$/g, '')).filter(Boolean); }
+
+/**
+ * Rebuilds the Product Photos tab from App Prices, keeping every photo already set
+ * (matched by product ID, or by product + brand if the category name changed).
+ * Products no longer in the price list keep their row at the bottom if they have a photo.
+ * Runs every 5 minutes; writes only when something changed.
+ */
+function syncPhotos() {
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(20000)) return 'Busy, try again';
+  try {
+    return syncPhotosCore_();
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function syncPhotosCore_() {
+  {
+    const book = SpreadsheetApp.openById(SHEET_ID);
+    const prices = book.getSheetByName('App Prices');
+    const n = prices.getLastRow() - 1;
+    if (n < 1) return 'App Prices is empty';
+    // Same product in two sizes (e.g. 625 / 620 Wp) shares one ID, and one photo row.
+    const seenId = {};
+    const items = prices.getRange(2, 1, n, 5).getValues()
+      .filter(r => String(r[0]).trim() && !seenId[String(r[0]).trim()] && (seenId[String(r[0]).trim()] = true))
+      .map(r => ({ id: String(r[0]).trim(), cat: String(r[1]), product: String(r[3]), brand: String(r[4]) }));
+
+    let sheet = book.getSheetByName('Product Photos');
+    if (!sheet) sheet = book.insertSheet('Product Photos');
+    const old = sheet.getLastRow() > 1 ? sheet.getRange(1, 1, sheet.getLastRow(), Math.max(sheet.getLastColumn(), 2)).getValues() : [[]];
+    const byId = {}, byName = {};
+    let rules = null;
+    if (String(old[0][0]).trim() === 'Product ID') {
+      old.slice(1).forEach(r => {
+        const rec = { url: String(r[1] || '').trim(), by: r[7] || '', on: r[8] || '', cat: r[3], product: r[4], brand: r[5] };
+        if (String(r[0]).trim()) byId[String(r[0]).trim()] = rec;
+        if (rec.url) byName[photoKey_(r[4], r[5])] = rec;
+      });
+    } else {
+      // First run: the old keyword rows. Keep a copy, and give each product the photo the
+      // keywords picked (the rule with the most matching words), for the team to check.
+      rules = old.slice(1).map(r => ({ w: words_(r[0]), url: String(r[1] || '').trim() })).filter(r => r.w.length && r.url);
+      const copy = book.getSheetByName('Photo Keywords (old)') || sheet.copyTo(book).setName('Photo Keywords (old)');
+      copy.hideSheet();
+    }
+
+    const rows = [], used = {};
+    items.forEach(it => {
+      let rec = byId[it.id] || byName[photoKey_(it.product, it.brand)];
+      if (!rec && rules) {
+        const have = words_(it.cat + ' ' + it.brand + ' ' + it.product);
+        let best = null;
+        rules.forEach(r => { if (r.w.every(w => have.indexOf(w) >= 0) && (!best || r.w.length > best.w.length)) best = r; });
+        if (best) rec = { url: best.url, by: 'Keyword (please check)', on: '' };
+      }
+      if (rec) used[photoKey_(rec.product || it.product, rec.brand || it.brand)] = true;
+      rows.push([it.id, rec ? rec.url : '', '', it.cat, it.product, it.brand, 'Yes', rec ? rec.by : '', rec ? rec.on : '']);
+    });
+    const listed = {}; items.forEach(it => listed[it.id] = true);
+    Object.keys(byId).forEach(id => {
+      const r = byId[id];
+      if (!listed[id] && r.url && !used[photoKey_(r.product, r.brand)]) rows.push([id, r.url, '', r.cat, r.product, r.brand, 'No', r.by, r.on]);
+    });
+
+    // Nothing changed? Leave the tab alone.
+    const now = old.length > 1 ? old.slice(1).map(r => [r[0], r[1], r[6]].join('¦')).join('\n') : '';
+    const next = rows.map(r => [r[0], r[1], r[6]].join('¦')).join('\n');
+    if (now === next && String(old[0][0]).trim() === 'Product ID') return 'Up to date: ' + items.length + ' products';
+
+    sheet.clear();
+    sheet.getRange(1, 1, 1, PHOTO_COLS.length).setValues([PHOTO_COLS]).setFontWeight('bold').setBackground('#0B5A33').setFontColor('#FFFFFF');
+    sheet.setFrozenRows(1);
+    if (rows.length) {
+      sheet.getRange(2, 1, rows.length, PHOTO_COLS.length).setValues(rows);
+      sheet.getRange(2, 3, rows.length, 1).setFormulas(rows.map((r, k) => {
+        const b = 'B' + (k + 2);
+        return ['=IF(' + b + '="","",IMAGE(IF(REGEXMATCH(' + b + ',"/d/|id="),"https://lh3.googleusercontent.com/d/"&REGEXEXTRACT(' + b + ',"(?:/d/|id=)([-\\w]{20,})"),' + b + ')))'];
+      }));
+      sheet.setRowHeights(2, rows.length, 64);
+      const missing = rows.map(r => [r[1] ? null : '#FFF4E0']);
+      sheet.getRange(2, 2, rows.length, 1).setBackgrounds(missing);
+      sheet.getRange(2, 1, rows.length, 1).setFontColor('#5F6B64');
+    }
+    sheet.setColumnWidth(1, 220); sheet.setColumnWidth(2, 320); sheet.setColumnWidth(3, 80);
+    sheet.setColumnWidth(4, 140); sheet.setColumnWidth(5, 240); sheet.setColumnWidth(6, 110);
+    sheet.getRange(1, 2).setNote('Paste a photo link for each product (Google Drive "Anyone with the link" share link, or any image link). Blank = category icon. Orange = no photo yet. Managers can also set photos from the app. Rows follow the price list automatically; do not edit Product ID.');
+    const without = rows.filter(r => r[6] === 'Yes' && !r[1]).length;
+    return items.length + ' products · ' + without + ' without a photo';
+  }
+}
+
+function photoFolder_() {
+  const p = PropertiesService.getScriptProperties();
+  const id = p.getProperty('PHOTO_FOLDER');
+  if (id) { try { const f = DriveApp.getFolderById(id); if (!f.isTrashed()) return f; } catch (_) {} }
+  const f = DriveApp.createFolder('Bihar Solar Circle – Product Photos');
+  p.setProperty('PHOTO_FOLDER', f.getId());
+  return f;
+}
+
+/** Manager / Founder sets (or removes, with no image) a product's photo from the app. */
+function setPhoto(book, d) {
+  const u = teamUser({ token: d.token });
+  const id = String(d.id || '').trim();
+  if (!id) return { ok: false, error: 'No product' };
+  let url = '';
+  if (d.image) {
+    const blob = Utilities.newBlob(Utilities.base64Decode(d.image), 'image/jpeg',
+      (clean(d.product) + ' ' + clean(d.brand)).replace(/[^\w .-]+/g, ' ').trim().slice(0, 80) + '.jpg');
+    const file = photoFolder_().createFile(blob);
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    url = 'https://drive.google.com/file/d/' + file.getId() + '/view';
+  }
+  const sheet = book.getSheetByName('Product Photos');
+  if (!sheet || String(sheet.getRange(1, 1).getValue()).trim() !== 'Product ID') syncPhotosCore_();
+  const ph = book.getSheetByName('Product Photos');
+  const ids = ph.getLastRow() > 1 ? ph.getRange(2, 1, ph.getLastRow() - 1, 1).getValues().map(r => String(r[0]).trim()) : [];
+  let row = ids.indexOf(id) + 2;
+  if (row < 2) {
+    row = ph.getLastRow() + 1;
+    ph.getRange(row, 1, 1, 7).setValues([[id, '', '', clean(d.category), clean(d.product), clean(d.brand), 'Yes']]);
+    const b = 'B' + row;
+    ph.getRange(row, 3).setFormula('=IF(' + b + '="","",IMAGE(IF(REGEXMATCH(' + b + ',"/d/|id="),"https://lh3.googleusercontent.com/d/"&REGEXEXTRACT(' + b + ',"(?:/d/|id=)([-\\w]{20,})"),' + b + ')))');
+  }
+  ph.getRange(row, 2).setValue(url).setBackground(url ? null : '#FFF4E0');
+  ph.getRange(row, 8, 1, 2).setValues([[u.name + ' (app)', new Date()]]);
+  return { ok: true, url: url };
 }
 
 // =====================================================================

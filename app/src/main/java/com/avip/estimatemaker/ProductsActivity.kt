@@ -13,11 +13,31 @@ import android.view.inputmethod.InputMethodManager
 import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.ScrollView
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Matrix
+import android.net.Uri
+import android.util.Base64
+import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.FileProvider
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import org.json.JSONObject
+import java.io.ByteArrayOutputStream
+import java.io.File
+
+/** Screens where an AVIP Manager / Founder can set a product's photo. */
+interface PhotoEditor {
+    fun editPhoto(p: Product)
+}
 
 /** Product list for one category, or search across all products. */
-class ProductsActivity : AppCompatActivity() {
+class ProductsActivity : AppCompatActivity(), PhotoEditor {
 
     companion object {
         const val EXTRA_CATEGORY = "category"
@@ -32,6 +52,105 @@ class ProductsActivity : AppCompatActivity() {
     private var query = ""
     private var brand: String? = null
     private val cartListener = { bar.refreshTag(); cartIcon.refreshTag() }
+
+    // ---- AVIP Team: set product photos ----
+    private var photoTarget: Product? = null
+    private var cameraUri: Uri? = null
+    private val takePhoto = registerForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
+        val p = photoTarget; val u = cameraUri
+        if (ok && p != null && u != null) upload(p, u)
+    }
+    private val pickPhoto = registerForActivityResult(ActivityResultContracts.GetContent()) { u ->
+        val p = photoTarget
+        if (u != null && p != null) upload(p, u)
+    }
+
+    override fun editPhoto(p: Product) {
+        photoTarget = p
+        val opts = mutableListOf(tr("Take photo", "फ़ोटो खींचें"), tr("Choose from gallery", "गैलरी से चुनें"))
+        val has = Catalog.photoFor(p).isNotBlank()
+        if (has) opts += tr("Remove photo", "फ़ोटो हटाएं")
+        AlertDialog.Builder(this)
+            .setTitle(tr("Photo for ", "फ़ोटो: ") + p.title)
+            .setItems(opts.toTypedArray()) { _, i ->
+                when (i) {
+                    0 -> {
+                        val f = File(cacheDir, "shared/photo_${System.currentTimeMillis()}.jpg").apply { parentFile?.mkdirs() }
+                        cameraUri = FileProvider.getUriForFile(this, "$packageName.files", f)
+                        takePhoto.launch(cameraUri)
+                    }
+                    1 -> pickPhoto.launch("image/*")
+                    else -> AlertDialog.Builder(this)
+                        .setMessage(tr("Remove the photo of ${p.title}? Everyone will see the category icon instead.",
+                            "${p.title} की फ़ोटो हटाएं? सभी को कैटेगरी आइकन दिखेगा।"))
+                        .setPositiveButton(tr("Remove", "हटाएं")) { _, _ -> send(p, "") }
+                        .setNegativeButton(tr("Cancel", "रद्द करें"), null).show()
+                }
+            }.show()
+    }
+
+    private fun upload(p: Product, uri: Uri) {
+        lifecycleScope.launch {
+            val image = withContext(Dispatchers.IO) { runCatching { prepare(uri) }.getOrNull() }
+            if (image == null) {
+                Toast.makeText(this@ProductsActivity, tr("Couldn't read that photo", "वह फ़ोटो पढ़ी नहीं जा सकी"), Toast.LENGTH_LONG).show()
+                return@launch
+            }
+            send(p, image)
+        }
+    }
+
+    /** Photo → upright JPEG, at most 1200 px, as base64. */
+    private fun prepare(uri: Uri): String {
+        val bytes = contentResolver.openInputStream(uri)!!.use { it.readBytes() }
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+        var sample = 1
+        while (maxOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= 1200) sample *= 2
+        var bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = sample })!!
+        val rotation = runCatching {
+            when (android.media.ExifInterface(bytes.inputStream()).getAttributeInt(
+                android.media.ExifInterface.TAG_ORIENTATION, android.media.ExifInterface.ORIENTATION_NORMAL)) {
+                android.media.ExifInterface.ORIENTATION_ROTATE_90 -> 90f
+                android.media.ExifInterface.ORIENTATION_ROTATE_180 -> 180f
+                android.media.ExifInterface.ORIENTATION_ROTATE_270 -> 270f
+                else -> 0f
+            }
+        }.getOrDefault(0f)
+        val scale = minOf(1f, 1200f / maxOf(bmp.width, bmp.height))
+        if (rotation != 0f || scale < 1f) {
+            val m = Matrix().apply { postScale(scale, scale); postRotate(rotation) }
+            bmp = Bitmap.createBitmap(bmp, 0, 0, bmp.width, bmp.height, m, true)
+        }
+        val out = ByteArrayOutputStream()
+        bmp.compress(Bitmap.CompressFormat.JPEG, 85, out)
+        return Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)
+    }
+
+    /** Uploads (or with "" removes) the photo; it lands in AVIP's Drive and the Product Photos tab. */
+    private fun send(p: Product, image: String) {
+        val wait = AlertDialog.Builder(this)
+            .setMessage(if (image.isBlank()) tr("Removing photo…", "फ़ोटो हट रही है…") else tr("Uploading photo…", "फ़ोटो अपलोड हो रही है…"))
+            .setCancelable(false).show()
+        lifecycleScope.launch {
+            try {
+                val o = Api.call(this@ProductsActivity, "setPhoto", JSONObject()
+                    .put("token", Session.token(this@ProductsActivity))
+                    .put("id", p.photoId.ifBlank { p.id }).put("category", p.category)
+                    .put("product", p.name).put("brand", p.brand).put("image", image))
+                Catalog.setLocalPhoto(p, o.optString("url"))
+                Toast.makeText(this@ProductsActivity,
+                    if (image.isBlank()) tr("Photo removed", "फ़ोटो हटा दी गई") else tr("Photo saved for everyone", "फ़ोटो सबके लिए सेव हो गई"),
+                    Toast.LENGTH_SHORT).show()
+                render()
+            } catch (e: ApiException) {
+                if (e.code == "SESSION" || e.code == "NOTEAM") goLogin(this@ProductsActivity, e.message)
+                else Toast.makeText(this@ProductsActivity, e.message, Toast.LENGTH_LONG).show()
+            } finally {
+                wait.dismiss()
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -202,7 +321,14 @@ fun productCard(a: Activity, p: Product, title: String = p.name, extra: View? = 
     card(12) {
         addView(horizontal {
             gravity = Gravity.TOP
-            addView(productPhoto(p, p.icon, 76))
+            if (Session.isTeam(a) && a is PhotoEditor) addView(vertical {
+                gravity = Gravity.CENTER_HORIZONTAL
+                addView(productPhoto(p, p.icon, 76))
+                addView(text("📷 " + tr("Photo", "फ़ोटो"), 11.5f, Ui.BRAND, bold = true) {
+                    setPadding(dp(4), dp(6), dp(4), dp(2))
+                    setOnClickListener { a.editPhoto(p) }
+                })
+            }) else addView(productPhoto(p, p.icon, 76))
             addView(vertical {
                 if (p.brand.isNotBlank()) addView(text(p.brand.uppercase(), 10.5f, Ui.categoryColor(p.icon), bold = true) {
                     letterSpacing = 0.06f

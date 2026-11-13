@@ -28,7 +28,7 @@ object ImageLoader {
     fun direct(url: String): String {
         val u = url.trim()
         val id = Regex("drive\\.google\\.com/(?:file/d/|open\\?id=|uc\\?(?:.*&)?id=)([A-Za-z0-9_-]+)").find(u)?.groupValues?.get(1)
-        return if (id != null) "https://drive.google.com/uc?export=download&id=$id" else u
+        return if (id != null) "https://lh3.googleusercontent.com/d/$id=w1200" else u
     }
 
     fun cached(url: String): Bitmap? = memory.get(url)

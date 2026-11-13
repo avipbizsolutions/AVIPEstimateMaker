@@ -20,9 +20,13 @@ object Catalog {
     private const val SETTINGS_TAB = "App Settings"
     private const val PHOTOS_TAB = "Product Photos"
 
-    /** One row of the "Product Photos" tab: all [words] must appear in a product. */
+    /** Old-style row of the "Product Photos" tab: all [words] must appear in a product. */
     private class PhotoRule(val words: List<String>, val url: String)
     @Volatile private var photoRules: List<PhotoRule> = emptyList()
+    /** New-style "Product Photos" tab: one row per product, keyed by its App Prices ID. */
+    @Volatile private var photoById: Map<String, String> = emptyMap()
+    @Volatile private var photoByName: Map<String, String> = emptyMap()
+    @Volatile private var productWisePhotos = false
 
     @Volatile var products: List<Product> = emptyList()
         private set
@@ -129,8 +133,17 @@ object Catalog {
     private fun tokens(text: String): Set<String> =
         text.lowercase().split(Regex("[^a-z0-9.]+")).map { it.trim('.') }.filter { it.isNotBlank() }.toSet()
 
-    /** Photo link for a product: the matching rule with the most keywords ("" = none). */
+    /**
+     * Photo link for a product ("" = show the category icon).
+     * Product-wise tab: the row with this product's ID, else the same product + brand
+     * (when only the category name changed). Old keyword tab: the rule with the most words.
+     */
     fun photoFor(p: Product): String {
+        if (productWisePhotos) {
+            return photoById[p.photoId.ifBlank { p.id }]
+                ?: photoByName[nameKey(p.name, p.brand)]
+                ?: ""
+        }
         val have = tokens("${p.category} ${p.brand} ${p.name}")
         var best: PhotoRule? = null
         for (r in photoRules) {
@@ -140,8 +153,43 @@ object Catalog {
         return best?.url ?: ""
     }
 
-    private fun parsePhotos(csv: String): List<PhotoRule> =
-        Csv.parse(csv).drop(1).mapNotNull { r ->
+    private fun nameKey(product: String, brand: String) =
+        "$product|$brand".lowercase().replace(Regex("\\s+"), " ").trim()
+
+    /** After a manager sets a photo from the app: show it straight away. */
+    fun setLocalPhoto(p: Product, url: String) {
+        val id = p.photoId.ifBlank { p.id }
+        photoById = photoById.toMutableMap().apply { if (url.isBlank()) remove(id) else put(id, url) }
+        photoByName = photoByName.toMutableMap().apply { if (url.isBlank()) remove(nameKey(p.name, p.brand)) else put(nameKey(p.name, p.brand), url) }
+        productWisePhotos = true
+    }
+
+    private fun parsePhotos(csv: String): List<PhotoRule> {
+        val rows = Csv.parse(csv)
+        val head = rows.firstOrNull()?.map { it.trim().lowercase() } ?: emptyList()
+        if (head.firstOrNull() == "product id") {
+            val cUrl = head.indexOf("photo url").takeIf { it >= 0 } ?: 1
+            val cProduct = head.indexOf("product")
+            val cBrand = head.indexOf("brand")
+            val byId = mutableMapOf<String, String>()
+            val byName = mutableMapOf<String, String>()
+            rows.drop(1).forEach { r ->
+                val url = r.getOrNull(cUrl)?.trim().orEmpty()
+                if (url.isBlank()) return@forEach
+                r.getOrNull(0)?.trim()?.takeIf { it.isNotBlank() }?.let { byId.putIfAbsent(it, url) }
+                if (cProduct >= 0) byName.putIfAbsent(nameKey(r.getOrNull(cProduct).orEmpty(), r.getOrNull(cBrand).orEmpty()), url)
+            }
+            photoById = byId
+            photoByName = byName
+            productWisePhotos = true
+            return emptyList()
+        }
+        productWisePhotos = false
+        return parseKeywordPhotos(rows)
+    }
+
+    private fun parseKeywordPhotos(rows: List<List<String>>): List<PhotoRule> =
+        rows.drop(1).mapNotNull { r ->
             val words = tokens(r.getOrNull(0) ?: "").toList()
             if (words.isEmpty()) null else PhotoRule(words, (r.getOrNull(1) ?: "").trim())
         }
@@ -178,13 +226,24 @@ object Catalog {
         val cGroup = col("group"); val cPack = col("pack")
         if (cName < 0 || cRate < 0) return emptyList()
 
+        val seen = mutableMapOf<String, Int>()
+        val usedIds = mutableSetOf<String>()
         return rows.drop(1).mapIndexedNotNull { i, r ->
             fun v(c: Int) = if (c in r.indices) r[c].trim() else ""
             val name = v(cName)
             if (name.isBlank()) return@mapIndexedNotNull null
             val stock = v(cStock).lowercase()
+            val rawId = v(cId).ifBlank { "ROW${i + 2}" }
+            // Two sizes of one product (e.g. Adani Topcon 625 Wp and 620 Wp) share an ID in the
+            // sheet: keep them apart in the app so each can be added to an estimate.
+            val n = (seen[rawId] ?: 0) + 1
+            seen[rawId] = n
+            var uniqueId = if (n == 1) rawId else "$rawId | " + v(cSpec).ifBlank { "#$n" }
+            if (n > 1 && !usedIds.add(uniqueId)) uniqueId += " #$n"
+            usedIds.add(uniqueId)
             Product(
-                id = v(cId).ifBlank { "ROW${i + 2}" },
+                id = uniqueId,
+                photoId = rawId,
                 category = v(cCat).ifBlank { "Other Products" },
                 icon = v(cIcon).lowercase().ifBlank { "other" },
                 name = name,

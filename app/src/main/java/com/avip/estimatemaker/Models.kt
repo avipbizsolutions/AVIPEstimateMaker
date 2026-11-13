@@ -24,6 +24,8 @@ data class Product(
     val group: String = "",
     /** "Loose", "Pallet" or "" (normal / packet). */
     val pack: String = "",
+    /** The row's ID exactly as in App Prices (two sizes of one product can share it): the photo key. */
+    val photoId: String = "",
 ) {
     val isLoose get() = pack.equals("Loose", ignoreCase = true)
     val isPallet get() = pack.equals("Pallet", ignoreCase = true)
