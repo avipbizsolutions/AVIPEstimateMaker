@@ -320,7 +320,6 @@ class EstimateActivity : AppCompatActivity() {
             EstimateStore.whatsapp(this, file, Catalog.settings["whatsapp"],
                 "Hello AVIP, I am ${Vendor.contact(this)} from ${Vendor.company(this)}. Sharing cost estimate ${doc.number}. I need help regarding order placement.")
         }, lp().margins(this, b = 8))
-        sheet.addView(pillButton(tr("Share…", "भेजें…"), 0xFFEFF3F1.toInt(), Ui.TEXT) { EstimateStore.share(this, file, msg) }, lp().margins(this, b = 8))
         sheet.addView(pillButton(tr("Save & close", "सेव करके बंद करें"), 0xFFEFF3F1.toInt(), Ui.TEXT) {
             // Already saved in My Cost Estimates; empty the cart and go back home.
             Cart.clear(this); if (team) TeamTarget.clear(this)
