@@ -410,10 +410,10 @@ fun productCard(a: Activity, p: Product, title: String = p.name, extra: View? = 
 }
 
 /** Shown while the phone is offline: which day's prices are on screen. */
-fun offlineBanner(a: Activity): View? {
+fun offlineBanner(a: Activity): View? = with(a) {
     if (Catalog.isLive || Catalog.updatedAt <= 0) return null
     val day = java.text.SimpleDateFormat("d MMM, h:mm a", java.util.Locale.ENGLISH).format(java.util.Date(Catalog.updatedAt))
-    return a.card(10) {
+    return card(10) {
         background = rounded(0xFFFFF4E0.toInt(), dpf(12f))
         addView(text(tr("📡 Offline — showing prices saved on $day. Pull down to refresh.", "📡 ऑफ़लाइन — $day को सेव हुए रेट दिख रहे हैं। रिफ्रेश के लिए नीचे खींचें।"),
             12.5f, 0xFF8A5A00.toInt()))
@@ -421,14 +421,14 @@ fun offlineBanner(a: Activity): View? {
 }
 
 /** "▲ up from ₹24.75/Wp" / "▼ down from …" when the rate changed since the last visit. */
-fun priceChangeView(a: Activity, p: Product): View? {
+fun priceChangeView(a: Activity, p: Product): View? = with(a) {
     val old = Catalog.priceChanges[p.id] ?: return null
     val now = Catalog.compareRate(p) ?: return null
     val up = now > old
     val was = if (p.perWp) "₹${Fmt.num(old)}/Wp" else Fmt.inr(old, old < 100)
     val label = (if (up) "▲ " else "▼ ") +
         (if (up) tr("Up from $was", "बढ़ा · पहले $was था") else tr("Down from $was", "घटा · पहले $was था"))
-    return a.text(label, 11f, if (up) Ui.DANGER else Ui.BRAND, bold = true) {
+    return text(label, 11f, if (up) Ui.DANGER else Ui.BRAND, bold = true) {
         background = rounded(if (up) 0xFFFDECEA.toInt() else 0xFFE8F3EC.toInt(), dpf(8f))
         setPadding(dp(6), dp(2), dp(6), dp(2))
     }
