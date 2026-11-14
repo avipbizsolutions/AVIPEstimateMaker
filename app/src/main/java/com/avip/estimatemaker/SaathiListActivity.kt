@@ -32,6 +32,9 @@ class SaathiListActivity : AppCompatActivity() {
 
     private var pick = false
     private var query = ""
+    /** null = all, "recent", "week" (logged in this week), "never" (not logged in yet). */
+    private var filter: String? = null
+    private lateinit var filters: LinearLayout
     private var loading = true
     private lateinit var list: LinearLayout
     private lateinit var status: TextView
@@ -60,6 +63,8 @@ class SaathiListActivity : AppCompatActivity() {
         }
         root.addView(box, lp().margins(this, 12, 12, 12, 0))
         status = text("", 11.5f, Ui.MUTED) { setPadding(dp(16), dp(6), dp(16), 0) }
+        filters = horizontal { setPadding(dp(12), dp(8), dp(12), 0) }
+        root.addView(android.widget.HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false; addView(filters) })
         root.addView(status)
         list = vertical(12)
         root.addView(pullToRefresh(ScrollView(this).apply { addView(list) }) { reload() }, lp(MATCH, 0, 1f))
@@ -91,8 +96,35 @@ class SaathiListActivity : AppCompatActivity() {
         else tr("${all.size} Surya Saathis · ${all.count { it.status.equals("Active", true) }} active",
             "${all.size} सूर्य साथी · ${all.count { it.status.equals("Active", true) }} सक्रिय")
         list.removeAllViews()
+
+        // When this phone last made an estimate for each customer.
+        val lastEstimate = HashMap<String, Long>()
+        EstimateStore.all(this).forEach { d -> d.buyer?.mobile?.let { m -> if (d.createdAt > (lastEstimate[m] ?: 0L)) lastEstimate[m] = d.createdAt } }
+        val weekAgo = System.currentTimeMillis() - 7L * 86_400_000L
+
+        filters.removeAllViews()
+        listOf(null to tr("All", "सभी"), "recent" to tr("Recent estimates", "हाल के अनुमान"),
+            "week" to tr("Active this week", "इस हफ़्ते सक्रिय"), "never" to tr("Not logged in yet", "अभी लॉगिन नहीं")).forEach { (key, label) ->
+            val on = filter == key
+            filters.addView(text(label, 13f, if (on) Color.WHITE else Ui.TEXT, bold = on) {
+                background = rounded(if (on) Ui.BRAND else Color.WHITE, dpf(18f), Ui.LINE, if (on) 0 else dp(1))
+                setPadding(dp(14), dp(8), dp(14), dp(8))
+                setOnClickListener { filter = key; render() }
+            }, lp(WRAP, WRAP).margins(this, r = 8))
+        }
+
         val words = query.lowercase().split(' ').filter { it.isNotBlank() }
         val shown = all.filter { b -> words.all { w -> "${b.company} ${b.contact} ${b.mobile} ${b.gst} ${b.city}".lowercase().contains(w) } }
+            .filter { b ->
+                when (filter) {
+                    "recent" -> lastEstimate.containsKey(b.mobile)
+                    "week" -> b.lastLogin >= weekAgo
+                    "never" -> b.lastLogin <= 0
+                    else -> true
+                }
+            }
+            // Customers you made estimates for recently come first, then the newest registrations.
+            .sortedWith(compareByDescending<Buyer> { lastEstimate[it.mobile] ?: 0L }.thenByDescending { it.registered })
         if (shown.isEmpty()) {
             list.addView(text(if (loading && all.isEmpty()) tr("Loading…", "लोड हो रहा है…") else tr("No one found", "कोई नहीं मिला"),
                 15f, Ui.MUTED) { gravity = Gravity.CENTER }, lp().margins(this, t = 40))

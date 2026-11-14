@@ -42,6 +42,8 @@ class ProductsActivity : AppCompatActivity(), PhotoEditor {
     companion object {
         const val EXTRA_CATEGORY = "category"
         const val EXTRA_SEARCH = "search"
+        /** Show only products whose rate changed since the last visit. */
+        const val EXTRA_CHANGED = "changed"
     }
 
     private lateinit var list: LinearLayout
@@ -50,6 +52,18 @@ class ProductsActivity : AppCompatActivity(), PhotoEditor {
     private lateinit var cartIcon: View
     private var category: String? = null
     private var query = ""
+    private var searchBox: android.widget.EditText? = null
+    private val recentPrefs by lazy { getSharedPreferences("settings", MODE_PRIVATE) }
+    private fun recentSearches(): List<String> =
+        (recentPrefs.getString("recent_searches", "") ?: "").split('\n').filter { it.isNotBlank() }
+
+    /** Remembers a search that found something (last 6, newest first). */
+    private fun rememberSearch() {
+        val q = query.trim()
+        if (searchBox == null || q.length < 2 || source().isEmpty()) return
+        val list = (listOf(q) + recentSearches().filter { !it.equals(q, true) }).take(6)
+        recentPrefs.edit().putString("recent_searches", list.joinToString("\n")).apply()
+    }
     private var brand: String? = null
     private val cartListener = { bar.refreshTag(); cartIcon.refreshTag() }
 
@@ -163,7 +177,8 @@ class ProductsActivity : AppCompatActivity(), PhotoEditor {
         val root = vertical()
         cartIcon = cartButton()
         val count = Catalog.products.count { category == null || it.category == category }
-        root.addView(topBar(category ?: tr("Search Products", "प्रोडक्ट खोजें"), if (category != null) tr("$count items · rates before GST", "$count आइटम · रेट GST से पहले") else tr("All categories", "सभी कैटेगरी"), right = listOf(cartIcon)))
+        if (changedOnly) category = null
+        root.addView(topBar(if (changedOnly) tr("Rate changes", "रेट में बदलाव") else category ?: tr("Search Products", "प्रोडक्ट खोजें"), if (category != null) tr("$count items · rates before GST", "$count आइटम · रेट GST से पहले") else tr("All categories", "सभी कैटेगरी"), right = listOf(cartIcon)))
 
         if (searchMode) {
             val box = input(tr("Type product, brand or size…", "प्रोडक्ट, ब्रांड या साइज़ लिखें…"), InputType.TYPE_CLASS_TEXT).apply {
@@ -177,6 +192,7 @@ class ProductsActivity : AppCompatActivity(), PhotoEditor {
                     override fun afterTextChanged(s: Editable?) { query = s.toString(); render() }
                 })
             }
+            searchBox = box
             root.addView(box, lp().margins(this, 12, 12, 12, 0))
             box.requestFocus()
             box.post {
@@ -208,12 +224,17 @@ class ProductsActivity : AppCompatActivity(), PhotoEditor {
 
     override fun onPause() {
         super.onPause()
+        rememberSearch()
         Cart.removeListener(cartListener)
     }
 
-    private fun source(): List<Product> =
-        if (category != null) Catalog.products.filter { it.category == category }
-        else Catalog.search(query)
+    private val changedOnly by lazy { intent.getBooleanExtra(EXTRA_CHANGED, false) }
+
+    private fun source(): List<Product> = when {
+        changedOnly -> Catalog.products.filter { Catalog.priceChanges.containsKey(it.id) }
+        category != null -> Catalog.products.filter { it.category == category }
+        else -> Catalog.search(query)
+    }
 
     private fun render() {
         val items = source()
@@ -234,6 +255,7 @@ class ProductsActivity : AppCompatActivity(), PhotoEditor {
         } else chips.visibility = View.GONE
 
         list.removeAllViews()
+        offlineBanner(this)?.let { list.addView(it, lp().margins(this, b = 10)) }
         if (Session.isTeam(this)) list.addView(text("📷 " + tr("AVIP Team: long-press a product photo to change it", "AVIP टीम: फ़ोटो बदलने के लिए प्रोडक्ट फ़ोटो को देर तक दबाएं"),
             11.5f, Ui.MUTED), lp().margins(this, b = 8))
         // Brand A → Z (no brand last); in search results, by category first so headings stay together.
@@ -241,10 +263,25 @@ class ProductsActivity : AppCompatActivity(), PhotoEditor {
         val shown = items.filter { brand == null || it.brand == brand }
             .sortedWith(compareBy<Product>(
                 { if (category == null) catOrder.indexOf(it.category) else 0 },
+                { if (it.available) 0 else 1 },          // sold-out / no rate at the end
                 { if (it.brand.isBlank()) 1 else 0 },
                 { it.brand.lowercase() },
-                { if (it.available) 0 else 1 },
             ))
+        if (shown.isEmpty() && category == null && query.isBlank() && recentSearches().isNotEmpty()) {
+            list.addView(text(tr("Recent searches", "हाल की खोज"), 13f, Ui.MUTED, bold = true), lp().margins(this, t = 8, b = 8))
+            val wrap = vertical()
+            recentSearches().forEach { q ->
+                wrap.addView(horizontal {
+                    setPadding(dp(4), dp(10), dp(4), dp(10))
+                    foreground = ripple()
+                    addView(icon(R.drawable.ic_history, Ui.MUTED, 18))
+                    addView(text(q, 15f, Ui.TEXT), lp(0, WRAP, 1f).margins(context, l = 12))
+                    setOnClickListener { searchBox?.setText(q); searchBox?.setSelection(q.length) }
+                })
+            }
+            list.addView(wrap)
+            return
+        }
         if (shown.isEmpty()) {
             list.addView(text(if (category == null && query.isBlank()) tr("Start typing to search all products", "सभी प्रोडक्ट खोजने के लिए लिखना शुरू करें") else tr("No products found", "कोई प्रोडक्ट नहीं मिला"),
                 15f, Ui.MUTED) { gravity = Gravity.CENTER }, lp().margins(this, t = 60))
@@ -334,6 +371,7 @@ fun variantCard(a: Activity, variants: List<Product>, onChange: () -> Unit): Vie
  */
 fun productCard(a: Activity, p: Product, title: String = p.name, extra: View? = null, onChange: () -> Unit): View = with(a) {
     card(12) {
+        if (!p.available) alpha = 0.6f
         addView(horizontal {
             gravity = Gravity.CENTER_VERTICAL
             addView(productPhoto(p, p.icon, 60).apply {
@@ -349,11 +387,12 @@ fun productCard(a: Activity, p: Product, title: String = p.name, extra: View? = 
                 if (p.notes.isNotBlank() && p.available) addView(text(p.notes, 11f, 0xFFB26A00.toInt()))
                 if (p.available) {
                     val price = p.unitPrice!!
+                    priceChangeView(a, p)?.let { addView(it, lp().margins(context, t = 4)) }
                     if (p.perWp && p.rate != null) {
-                        addView(text("₹${Fmt.num(p.rate)}/Wp", 17f, Ui.BRAND_DARK, bold = true), lp().margins(context, t = 4))
+                        addView(text("₹${Fmt.num(p.rate)}/Wp", 17f, Ui.BRAND_DARK, bold = true), lp().margins(context, t = 2))
                         addView(text(Fmt.inr(price, true) + tr(" per panel", " प्रति पैनल") + " · +${Fmt.num(p.gst)}% GST", 11f, Ui.MUTED))
                     } else {
-                        addView(text(Fmt.inr(price, decimals = price < 100), 17f, Ui.BRAND_DARK, bold = true), lp().margins(context, t = 4))
+                        addView(text(Fmt.inr(price, decimals = price < 100), 17f, Ui.BRAND_DARK, bold = true), lp().margins(context, t = 2))
                         addView(text("+${Fmt.num(p.gst)}% GST", 11f, Ui.MUTED))
                     }
                 } else {
@@ -367,6 +406,31 @@ fun productCard(a: Activity, p: Product, title: String = p.name, extra: View? = 
             })
         })
         if (extra != null) addView(extra, lp().margins(context, t = 10))
+    }
+}
+
+/** Shown while the phone is offline: which day's prices are on screen. */
+fun offlineBanner(a: Activity): View? {
+    if (Catalog.isLive || Catalog.updatedAt <= 0) return null
+    val day = java.text.SimpleDateFormat("d MMM, h:mm a", java.util.Locale.ENGLISH).format(java.util.Date(Catalog.updatedAt))
+    return a.card(10) {
+        background = rounded(0xFFFFF4E0.toInt(), dpf(12f))
+        addView(text(tr("📡 Offline — showing prices saved on $day. Pull down to refresh.", "📡 ऑफ़लाइन — $day को सेव हुए रेट दिख रहे हैं। रिफ्रेश के लिए नीचे खींचें।"),
+            12.5f, 0xFF8A5A00.toInt()))
+    }
+}
+
+/** "▲ up from ₹24.75/Wp" / "▼ down from …" when the rate changed since the last visit. */
+fun priceChangeView(a: Activity, p: Product): View? {
+    val old = Catalog.priceChanges[p.id] ?: return null
+    val now = Catalog.compareRate(p) ?: return null
+    val up = now > old
+    val was = if (p.perWp) "₹${Fmt.num(old)}/Wp" else Fmt.inr(old, old < 100)
+    val label = (if (up) "▲ " else "▼ ") +
+        (if (up) tr("Up from $was", "बढ़ा · पहले $was था") else tr("Down from $was", "घटा · पहले $was था"))
+    return a.text(label, 11f, if (up) Ui.DANGER else Ui.BRAND, bold = true) {
+        background = rounded(if (up) 0xFFFDECEA.toInt() else 0xFFE8F3EC.toInt(), dpf(8f))
+        setPadding(dp(6), dp(2), dp(6), dp(2))
     }
 }
 

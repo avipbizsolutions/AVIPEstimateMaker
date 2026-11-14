@@ -139,22 +139,25 @@ class EstimateActivity : AppCompatActivity() {
                             background = rounded(0xFFFFF4E0.toInt(), dpf(8f))
                             setPadding(dp(6), dp(2), dp(6), dp(2))
                         }, lp(WRAP, WRAP).margins(context, l = 6))
-                        if (team) addView(text(tr("✎ Rate", "✎ रेट"), 12.5f, Ui.BRAND, bold = true) {
-                            setPadding(dp(10), dp(2), dp(4), dp(2))
-                        })
+                        if (team) addView(text(tr("✎ Rate", "✎ रेट"), 13.5f, Ui.BRAND, bold = true) {
+                            background = rounded(0xFFE8F3EC.toInt(), dpf(16f))
+                            setPadding(dp(14), dp(8), dp(14), dp(8))
+                            minHeight = dp(40)
+                            gravity = Gravity.CENTER
+                        }, lp(WRAP, WRAP).margins(context, l = 8))
                         if (team) setOnClickListener { specialRate(l) }
                     }, lp().margins(context, t = 2))
                 }, lp(0, WRAP, 1f).margins(context, l = 10))
-                addView(icon(R.drawable.ic_delete, Ui.DANGER, 36).apply {
-                    setPadding(dp(8), dp(8), dp(8), dp(8))
+                addView(icon(R.drawable.ic_delete, Ui.DANGER, 46).apply {
+                    setPadding(dp(11), dp(11), dp(11), dp(11))
                     setOnClickListener { removeWithUndo(l) }
                 })
             })
             addView(horizontal {
                 addView(horizontal {
-                    background = rounded(0xFFE8F3EC.toInt(), dpf(18f))
-                    addView(icon(R.drawable.ic_minus, Ui.BRAND, 36).apply {
-                        setPadding(dp(9), dp(9), dp(9), dp(9))
+                    background = rounded(0xFFE8F3EC.toInt(), dpf(24f))
+                    addView(icon(R.drawable.ic_minus, Ui.BRAND, 48).apply {
+                        setPadding(dp(12), dp(12), dp(12), dp(12))
                         setOnClickListener {
                             // Pallets step a whole pallet at a time.
                             val next = l.qty - (if (l.minQty > 1) l.minQty else 1.0)
@@ -162,8 +165,8 @@ class EstimateActivity : AppCompatActivity() {
                             l.qty = next; Cart.changed(this@EstimateActivity); render()
                         }
                     })
-                    addView(text(Fmt.qty(l.qty), 15f, Ui.BRAND_DARK, bold = true) {
-                        gravity = Gravity.CENTER; minWidth = dp(44)
+                    addView(text(Fmt.qty(l.qty), 17f, Ui.BRAND_DARK, bold = true) {
+                        gravity = Gravity.CENTER; minWidth = dp(52); minHeight = dp(48)
                         paintFlags = paintFlags or android.graphics.Paint.UNDERLINE_TEXT_FLAG
                         setOnClickListener {
                             askQty(this@EstimateActivity, l.name, l.unit, l.qty) { v ->
@@ -172,8 +175,8 @@ class EstimateActivity : AppCompatActivity() {
                             }
                         }
                     })
-                    addView(icon(R.drawable.ic_plus, Ui.BRAND, 36).apply {
-                        setPadding(dp(9), dp(9), dp(9), dp(9))
+                    addView(icon(R.drawable.ic_plus, Ui.BRAND, 48).apply {
+                        setPadding(dp(12), dp(12), dp(12), dp(12))
                         setOnClickListener { l.qty += (if (l.minQty > 1) l.minQty else 1.0); Cart.changed(this@EstimateActivity); render() }
                     })
                 })

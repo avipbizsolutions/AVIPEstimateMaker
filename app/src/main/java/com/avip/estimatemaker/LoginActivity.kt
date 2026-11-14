@@ -36,6 +36,10 @@ class LoginActivity : AppCompatActivity() {
     private lateinit var saathiLinks: LinearLayout
     private lateinit var teamNote: TextView
     private var busy = false
+    private val boxes = mutableListOf<TextView>()
+    private var showPin = false
+    private val prefs by lazy { getSharedPreferences("settings", MODE_PRIVATE) }
+    private fun lastMobile(forTeam: Boolean) = prefs.getString(if (forTeam) "last_mobile_team" else "last_mobile_saathi", "") ?: ""
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -65,26 +69,48 @@ class LoginActivity : AppCompatActivity() {
             addView(tabs)
 
             mobile = input(tr("10-digit mobile number", "10 अंकों का मोबाइल नंबर"), InputType.TYPE_CLASS_PHONE,
-                intent.getStringExtra(EXTRA_MOBILE) ?: Vendor.mobile(context)).apply {
+                intent.getStringExtra(EXTRA_MOBILE) ?: lastMobile(team).ifBlank { Vendor.mobile(context) }).apply {
                 filters = arrayOf<InputFilter>(InputFilter.LengthFilter(10))
             }
-            pin = input("• • • •", InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD).apply {
+            // Four PIN boxes; an invisible field on top takes the typing. Logs in on the 4th digit.
+            pin = EditText(context).apply {
+                inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
                 filters = arrayOf<InputFilter>(InputFilter.LengthFilter(4))
-                transformationMethod = PasswordTransformationMethod.getInstance()
-                letterSpacing = 0.4f
+                setTextColor(Color.TRANSPARENT)
+                setBackgroundColor(Color.TRANSPARENT)
+                isCursorVisible = false
+                isLongClickable = false
                 setOnEditorActionListener { _, _, _ -> login(); true }
+                addTextChangedListener(object : android.text.TextWatcher {
+                    override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+                    override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+                    override fun afterTextChanged(s: android.text.Editable?) {
+                        showBoxes()
+                        if (s?.length == 4 && mobile.text.filter { it.isDigit() }.length == 10) login()
+                    }
+                })
             }
             addView(text(tr("Mobile number", "मोबाइल नंबर"), 12.5f, Ui.BRAND_DARK, bold = true), lp().margins(context, t = 16, b = 6))
             addView(mobile)
             addView(text(tr("4-digit PIN", "4 अंकों का PIN"), 12.5f, Ui.BRAND_DARK, bold = true), lp().margins(context, t = 12, b = 6))
             addView(horizontal {
-                addView(pin, lp(0, WRAP, 1f))
+                gravity = Gravity.CENTER_VERTICAL
+                addView(android.widget.FrameLayout(context).apply {
+                    addView(horizontal {
+                        repeat(4) { k ->
+                            val b = text("", 24f, Ui.TEXT, bold = true) {
+                                gravity = Gravity.CENTER
+                                background = rounded(0xFFF7FAF8.toInt(), dpf(12f), Ui.LINE, dp(2))
+                            }
+                            boxes += b
+                            addView(b, lp(0, dp(56), 1f).margins(context, r = if (k < 3) 10 else 0))
+                        }
+                    }, android.widget.FrameLayout.LayoutParams(MATCH, dp(56)))
+                    addView(pin, android.widget.FrameLayout.LayoutParams(MATCH, dp(56)))
+                }, lp(0, WRAP, 1f))
                 addView(text("👁", 20f, Ui.MUTED) {
                     setPadding(dp(12), dp(8), dp(4), dp(8))
-                    setOnClickListener {
-                        pin.transformationMethod = if (pin.transformationMethod == null) PasswordTransformationMethod.getInstance() else null
-                        pin.setSelection(pin.text.length)
-                    }
+                    setOnClickListener { showPin = !showPin; showBoxes() }
                 })
             })
             errorView = text(intent.getStringExtra(EXTRA_MESSAGE) ?: "", 12.5f, Ui.DANGER)
@@ -111,11 +137,22 @@ class LoginActivity : AppCompatActivity() {
         form.addView(View(this), lp(MATCH, dp(24)))
         setEdgeContent(root, lightBars = false)
         showTabs()
+        showBoxes()
+        if (mobile.text.length == 10) pin.requestFocus()
     }
 
     private fun link(t: String, onClick: () -> Unit) = text(t, 13.5f, Ui.BRAND, bold = true) {
         setPadding(0, dp(10), 0, dp(4))
         setOnClickListener { onClick() }
+    }
+
+    /** Draws the typed digits (or dots) into the four boxes; the next empty box is highlighted. */
+    private fun showBoxes() {
+        val t = pin.text.toString()
+        boxes.forEachIndexed { i, b ->
+            b.text = if (i < t.length) (if (showPin) t[i].toString() else "●") else ""
+            b.background = rounded(0xFFF7FAF8.toInt(), dpf(12f), if (i == t.length.coerceAtMost(3)) Ui.BRAND else Ui.LINE, dp(2))
+        }
     }
 
     private fun showTabs() {
@@ -126,7 +163,14 @@ class LoginActivity : AppCompatActivity() {
                 gravity = Gravity.CENTER
                 setPadding(0, dp(10), 0, dp(10))
                 background = if (on) rounded(Ui.BRAND, dpf(20f)) else null
-                setOnClickListener { team = isTeam; errorView.text = ""; showTabs() }
+                setOnClickListener {
+                    if (team != isTeam) {
+                        // Each tab remembers its own last mobile number.
+                        val other = lastMobile(isTeam)
+                        if (other.isNotBlank() && (mobile.text.isBlank() || mobile.text.toString() == lastMobile(team))) mobile.setText(other)
+                    }
+                    team = isTeam; errorView.text = ""; showTabs()
+                }
             }, lp(0, WRAP, 1f))
         }
         saathiLinks.visibility = if (team) View.GONE else View.VISIBLE
@@ -138,7 +182,7 @@ class LoginActivity : AppCompatActivity() {
         val m = mobile.text.toString().filter { it.isDigit() }
         val p = pin.text.toString()
         if (!Regex("[6-9][0-9]{9}").matches(m)) { mobile.error = tr("Enter a valid 10-digit mobile", "सही 10 अंकों का मोबाइल लिखें"); mobile.requestFocus(); return }
-        if (!Regex("[0-9]{4}").matches(p)) { pin.error = tr("Enter your 4-digit PIN", "अपना 4 अंकों का PIN लिखें"); pin.requestFocus(); return }
+        if (!Regex("[0-9]{4}").matches(p)) { errorView.text = tr("Enter your 4-digit PIN", "अपना 4 अंकों का PIN लिखें"); pin.requestFocus(); return }
         busy = true
         errorView.text = ""
         loginBtn.text = tr("Logging in…", "लॉगिन हो रहा है…")
@@ -151,11 +195,13 @@ class LoginActivity : AppCompatActivity() {
                     val o = Api.call(this@LoginActivity, "login", JSONObject().put("mobile", m).put("pin", p))
                     Session.saveSaathi(this@LoginActivity, o.getString("token"), o.getJSONObject("profile"), o.optBoolean("mustSetPin"))
                 }
+                prefs.edit().putString(if (team) "last_mobile_team" else "last_mobile_saathi", m).apply()
                 startActivity(Intent(this@LoginActivity,
                     if (Session.mustSetPin(this@LoginActivity)) SetPinActivity::class.java else MainActivity::class.java)
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
                 finish()
             } catch (e: ApiException) {
+                pin.setText("")
                 errorView.text = e.message
                 if (e.code == "NOTFOUND") errorView.text = e.message + "\n" + tr("Tap \"Register as Surya Saathi\" below.", "नीचे \"सूर्य साथी के रूप में रजिस्टर करें\" दबाएं।")
             } finally {

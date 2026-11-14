@@ -50,6 +50,54 @@ class MainActivity : AppCompatActivity() {
         refreshAll(false)
         Store.onHomeOpened(this)
         checkLogin()
+        if (Session.isSaathi(this)) welcomeOnce()
+    }
+
+    /** Three quick tips, once, after a Surya Saathi's first login. */
+    private fun welcomeOnce() {
+        val prefs = getSharedPreferences("settings", MODE_PRIVATE)
+        if (prefs.getBoolean("welcome_shown", false)) return
+        prefs.edit().putBoolean("welcome_shown", true).apply()
+        val tips = listOf(
+            Triple("kit", tr("Make a cost estimate", "लागत अनुमान बनाएं"),
+                tr("Open AVIP Cost Estimate, pick a category and tap ADD on the products you need. Your cart fills up at the bottom.",
+                    "AVIP Cost Estimate खोलें, कैटेगरी चुनें और ज़रूरी प्रोडक्ट पर ADD दबाएं। नीचे आपकी कार्ट भरती जाएगी।")),
+            Triple("panel", tr("Packet or loose, single or pallet", "पैकेट या खुला, एक पैनल या पैलेट"),
+                tr("Some products have a switch: Packet | Loose for hardware, Single panel | Pallet for panels. Pallets have a lower rate per Wp.",
+                    "कुछ प्रोडक्ट पर स्विच है: हार्डवेयर के लिए Packet | Loose, पैनल के लिए Single panel | Pallet। पैलेट में प्रति Wp रेट कम है।")),
+            Triple("cable", tr("Send it to AVIP", "AVIP को भेजें"),
+                tr("Tap View Estimate → Create Cost Estimate PDF → Send to AVIP on WhatsApp. The AVIP team confirms your order.",
+                    "View Estimate → Create Cost Estimate PDF → WhatsApp पर AVIP को भेजें दबाएं। AVIP टीम आपका ऑर्डर कन्फ़र्म करेगी।")),
+        )
+        var page = 0
+        val badge = android.widget.FrameLayout(this)
+        val title = text("", 18f, Ui.TEXT, bold = true) { gravity = Gravity.CENTER }
+        val body = text("", 14f, Ui.MUTED) { gravity = Gravity.CENTER }
+        val dots = text("", 14f, Ui.BRAND, bold = true) { gravity = Gravity.CENTER }
+        val box = vertical(22) {
+            gravity = Gravity.CENTER_HORIZONTAL
+            addView(badge, lp(WRAP, WRAP))
+            addView(title, lp().margins(context, t = 14))
+            addView(body, lp().margins(context, t = 8))
+            addView(dots, lp().margins(context, t = 14))
+        }
+        val d = androidx.appcompat.app.AlertDialog.Builder(this).setView(box)
+            .setPositiveButton(tr("Next", "आगे"), null)
+            .setNegativeButton(tr("Skip", "छोड़ें"), null).create()
+        fun show() {
+            val (ic, t, b) = tips[page]
+            badge.removeAllViews(); badge.addView(iconBadge(ic, 64))
+            title.text = t; body.text = b
+            dots.text = tips.indices.joinToString("  ") { if (it == page) "●" else "○" }
+            d.getButton(androidx.appcompat.app.AlertDialog.BUTTON_POSITIVE)?.text = if (page == tips.size - 1) tr("Start", "शुरू करें") else tr("Next", "आगे")
+        }
+        d.setOnShowListener {
+            show()
+            d.getButton(androidx.appcompat.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                if (page < tips.size - 1) { page++; show() } else d.dismiss()
+            }
+        }
+        d.show()
     }
 
     /** Still allowed in? (PIN reset, blocked or removed in the sheet / directory → login again.) */
@@ -156,6 +204,8 @@ class MainActivity : AppCompatActivity() {
         content.removeAllViews()
         val s = Catalog.settings
 
+        offlineBanner(this)?.let { content.addView(it, lp().margins(this, b = 12)) }
+
         // Greeting card
         content.addView(vertical(16) {
             background = gradient(dpf(18f), 0xFF0B5A33.toInt(), 0xFF14935A.toInt())
@@ -177,6 +227,30 @@ class MainActivity : AppCompatActivity() {
                 addView(text(tr("Price list: ", "रेट लिस्ट: ") + updated, 11.5f, 0xDDFFFFFF.toInt()), lp(WRAP, WRAP).margins(context, l = 8))
             }, lp().margins(context, t = 12))
         })
+
+        // Rates that changed since the last visit
+        val changes = Catalog.priceChanges
+        if (changes.isNotEmpty()) {
+            val ups = Catalog.products.count { p -> changes[p.id]?.let { old -> (Catalog.compareRate(p) ?: old) > old } == true }
+            val downs = changes.size - ups
+            content.addView(card(12) {
+                foreground = ripple()
+                addView(horizontal {
+                    gravity = Gravity.CENTER_VERTICAL
+                    addView(vertical {
+                        addView(text(tr("Rates changed since your last visit", "आपकी पिछली विज़िट के बाद रेट बदले हैं"), 14.5f, Ui.TEXT, bold = true))
+                        addView(text(listOfNotNull(
+                            if (downs > 0) tr("▼ $downs down", "▼ $downs घटे") else null,
+                            if (ups > 0) tr("▲ $ups up", "▲ $ups बढ़े") else null,
+                        ).joinToString("   "), 13f, Ui.MUTED, bold = true), lp().margins(context, t = 2))
+                    }, lp(0, WRAP, 1f))
+                    addView(text(tr("See ›", "देखें ›"), 14f, Ui.BRAND, bold = true))
+                })
+                setOnClickListener {
+                    startActivity(Intent(this@MainActivity, ProductsActivity::class.java).putExtra(ProductsActivity.EXTRA_CHANGED, true))
+                }
+            }, lp().margins(this, t = 12))
+        }
 
         // Announcement from the sheet
         if (s["announcement"].isNotBlank()) {

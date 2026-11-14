@@ -80,6 +80,7 @@ object Catalog {
             updatedAt = System.currentTimeMillis()
             isLive = true
             Cart.reprice(context)
+            markChanges(context)
             true
         } catch (_: Exception) {
             false
@@ -202,13 +203,77 @@ object Catalog {
             Category(name, items.first().icon, items)
         }
 
+    /** Common Hindi words → the English words used in the price list. */
+    private val hindiWords = listOf(
+        "पैनल" to "panel", "पेनल" to "panel", "प्लेट" to "panel", "सोलर" to "solar", "सौर" to "solar",
+        "तार" to "cable", "वायर" to "wire", "केबल" to "cable", "बैटरी" to "battery", "बेटरी" to "battery",
+        "इन्वर्टर" to "inverter", "इनवर्टर" to "inverter", "इन्वर्टर" to "inverter", "इनवर्टर" to "inverter",
+        "स्ट्रक्चर" to "structure", "ढांचा" to "structure", "पाइप" to "pipe", "अर्थिंग" to "earthing",
+        "नट" to "nut", "बोल्ट" to "bolt", "क्लैंप" to "clamp", "किट" to "kit", "लग" to "lug",
+        "टेप" to "tape", "स्क्रू" to "screw", "पेंच" to "screw", "चैनल" to "channel", "एंगल" to "angle",
+    )
+
+    /** Lower case, Hindi words translated, "4mm" → "4 mm". Same rule for products and the query. */
+    private fun normalize(t: String): String {
+        var x = t.lowercase()
+        hindiWords.forEach { (hi, en) -> x = x.replace(hi, " $en ") }
+        x = x.replace(Regex("(\\d)([a-z])"), "$1 $2").replace(Regex("([a-z])(\\d)"), "$1 $2")
+        return x
+    }
+
+    private fun editDistance(a: String, b: String): Int {
+        val d = IntArray(b.length + 1) { it }
+        for (i in 1..a.length) {
+            var prev = d[0]; d[0] = i
+            for (j in 1..b.length) {
+                val tmp = d[j]
+                d[j] = minOf(d[j] + 1, d[j - 1] + 1, prev + if (a[i - 1] == b[j - 1]) 0 else 1)
+                prev = tmp
+            }
+        }
+        return d[b.length]
+    }
+
+    /**
+     * Every typed word must match the product: as part of its text, or as a near spelling of one
+     * of its words ("finolax" → Finolex, "microteck" → Microtek). Hindi words and "4mm" / "4 mm" work.
+     */
     fun search(query: String): List<Product> {
-        val words = query.lowercase().split(' ').filter { it.isNotBlank() }
+        val words = tokens(normalize(query)).toList()
         if (words.isEmpty()) return emptyList()
         return products.filter { p ->
-            val hay = "${p.category} ${p.brand} ${p.name} ${p.spec} ${p.unit}".lowercase()
-            words.all { hay.contains(it) }
+            val hay = normalize("${p.category} ${p.brand} ${p.name} ${p.spec} ${p.unit}")
+            val hayWords = tokens(hay)
+            words.all { w ->
+                hay.contains(w) || (w.length >= 4 && hayWords.any { h ->
+                    h.length >= 3 && editDistance(w, if (h.length > w.length + 2) h.take(w.length) else h) <= (if (w.length >= 7) 2 else 1)
+                })
+            }
         }
+    }
+
+    // ---- price changes since the last visit ----
+
+    /** Product ID → its rate at the last visit (only products whose rate changed since then). */
+    @Volatile var priceChanges: Map<String, Double> = emptyMap(); private set
+    private var seenAtStart: Map<String, Double>? = null
+
+    /** What buyers compare: ₹/Wp for panels, the unit price for everything else. */
+    fun compareRate(p: Product): Double? = if (p.perWp) p.rate else p.unitPrice
+
+    /** Compares today's rates with the ones seen on the last visit, then remembers today's. */
+    fun markChanges(context: Context) {
+        val prefs = context.applicationContext.getSharedPreferences("seen_prices", Context.MODE_PRIVATE)
+        if (seenAtStart == null) {
+            seenAtStart = runCatching {
+                val o = org.json.JSONObject(prefs.getString("rates", "{}") ?: "{}")
+                o.keys().asSequence().associateWith { o.getDouble(it) }
+            }.getOrDefault(emptyMap())
+        }
+        val start = seenAtStart ?: emptyMap()
+        val now = products.mapNotNull { p -> compareRate(p)?.let { p.id to it } }.toMap()
+        priceChanges = now.mapNotNull { (id, v) -> start[id]?.takeIf { kotlin.math.abs(it - v) > 0.004 }?.let { id to it } }.toMap()
+        prefs.edit().putString("rates", org.json.JSONObject(now as Map<*, *>).toString()).apply()
     }
 
     // ---- parsing ----
