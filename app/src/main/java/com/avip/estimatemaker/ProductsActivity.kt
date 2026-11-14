@@ -234,6 +234,8 @@ class ProductsActivity : AppCompatActivity(), PhotoEditor {
         } else chips.visibility = View.GONE
 
         list.removeAllViews()
+        if (Session.isTeam(this)) list.addView(text("📷 " + tr("AVIP Team: long-press a product photo to change it", "AVIP टीम: फ़ोटो बदलने के लिए प्रोडक्ट फ़ोटो को देर तक दबाएं"),
+            11.5f, Ui.MUTED), lp().margins(this, b = 8))
         // Brand A → Z (no brand last); in search results, by category first so headings stay together.
         val catOrder = Catalog.categories().map { it.name }
         val shown = items.filter { brand == null || it.brand == brand }
@@ -325,48 +327,46 @@ fun variantCard(a: Activity, variants: List<Product>, onChange: () -> Unit): Vie
 }
 
 /** A product card with price and an Add / − qty + control. Used by list screens. */
+/**
+ * Compact product row: photo | brand, name, size, price | ADD / stepper.
+ * Panels show ₹/Wp as the main price (how buyers compare panels).
+ * AVIP team: long-press the photo to change it.
+ */
 fun productCard(a: Activity, p: Product, title: String = p.name, extra: View? = null, onChange: () -> Unit): View = with(a) {
     card(12) {
         addView(horizontal {
-            gravity = Gravity.TOP
-            if (Session.isTeam(a) && a is PhotoEditor) addView(vertical {
-                gravity = Gravity.CENTER_HORIZONTAL
-                addView(productPhoto(p, p.icon, 76))
-                addView(text("📷 " + tr("Photo", "फ़ोटो"), 11.5f, Ui.BRAND, bold = true) {
-                    setPadding(dp(4), dp(6), dp(4), dp(2))
-                    setOnClickListener { a.editPhoto(p) }
-                })
-            }) else addView(productPhoto(p, p.icon, 76))
+            gravity = Gravity.CENTER_VERTICAL
+            addView(productPhoto(p, p.icon, 60).apply {
+                if (Session.isTeam(a) && a is PhotoEditor) setOnLongClickListener { a.editPhoto(p); true }
+            })
             addView(vertical {
                 if (p.brand.isNotBlank()) addView(text(p.brand.uppercase(), 10.5f, Ui.categoryColor(p.icon), bold = true) {
                     letterSpacing = 0.06f
                 })
-                addView(text(title, 15f, Ui.TEXT, bold = true))
+                addView(text(title, 14.5f, Ui.TEXT, bold = true) { maxLines = 2 })
                 val sub = listOf(p.spec, tr("per ", "प्रति ") + p.unit.lowercase()).filter { it.isNotBlank() }.joinToString(" · ")
-                addView(text(sub, 12f, Ui.MUTED), lp().margins(context, t = 2))
-                if (p.notes.isNotBlank() && p.available) addView(text(p.notes, 11.5f, 0xFFB26A00.toInt()), lp().margins(context, t = 2))
-            }, lp(0, WRAP, 1f).margins(context, l = 12))
+                addView(text(sub, 11.5f, Ui.MUTED))
+                if (p.notes.isNotBlank() && p.available) addView(text(p.notes, 11f, 0xFFB26A00.toInt()))
+                if (p.available) {
+                    val price = p.unitPrice!!
+                    if (p.perWp && p.rate != null) {
+                        addView(text("₹${Fmt.num(p.rate)}/Wp", 17f, Ui.BRAND_DARK, bold = true), lp().margins(context, t = 4))
+                        addView(text(Fmt.inr(price, true) + tr(" per panel", " प्रति पैनल") + " · +${Fmt.num(p.gst)}% GST", 11f, Ui.MUTED))
+                    } else {
+                        addView(text(Fmt.inr(price, decimals = price < 100), 17f, Ui.BRAND_DARK, bold = true), lp().margins(context, t = 4))
+                        addView(text("+${Fmt.num(p.gst)}% GST", 11f, Ui.MUTED))
+                    }
+                } else {
+                    addView(text(tr("Rate on request", "रेट पूछें"), 14f, Ui.MUTED, bold = true), lp().margins(context, t = 4))
+                    addView(text(if (p.inStock) tr("Price not listed right now", "अभी रेट उपलब्ध नहीं") else tr("Currently not available", "अभी स्टॉक में नहीं"), 11f, Ui.MUTED))
+                }
+            }, lp(0, WRAP, 1f).margins(context, l = 12, r = 8))
+            if (p.available) addView(qtyControl(a, p, onChange))
+            else addView(pillButton(tr("Ask AVIP", "AVIP से पूछें"), 0xFF25D366.toInt(), Color.WHITE, 38) {
+                EstimateStore.chatAvip(a, "Hello AVIP, please share the rate for ${p.title} ${p.spec}.")
+            })
         })
         if (extra != null) addView(extra, lp().margins(context, t = 10))
-
-        addView(horizontal {
-            if (p.available) {
-                addView(vertical {
-                    addView(text(Fmt.inr(p.unitPrice!!, decimals = p.unitPrice!! < 100), 19f, Ui.BRAND_DARK, bold = true))
-                    val extra = if (p.perWp) "₹${Fmt.num(p.rate!!)}/Wp · +${Fmt.num(p.gst)}% GST" else "+${Fmt.num(p.gst)}% GST"
-                    addView(text(extra, 11.5f, Ui.MUTED))
-                }, lp(0, WRAP, 1f))
-                addView(qtyControl(a, p, onChange))
-            } else {
-                addView(vertical {
-                    addView(text(tr("Rate on request", "रेट पूछें"), 15f, Ui.MUTED, bold = true))
-                    addView(text(if (p.inStock) tr("Price not listed right now", "अभी रेट उपलब्ध नहीं") else tr("Currently not available", "अभी स्टॉक में नहीं"), 11.5f, Ui.MUTED))
-                }, lp(0, WRAP, 1f))
-                addView(pillButton(tr("Ask AVIP", "AVIP से पूछें"), 0xFF25D366.toInt(), Color.WHITE, 38) {
-                    EstimateStore.chatAvip(a, "Hello AVIP, please share the rate for ${p.title} ${p.spec}.")
-                })
-            }
-        }, lp().margins(context, t = 10))
     }
 }
 
@@ -377,22 +377,26 @@ fun qtyControl(a: Activity, p: Product, onChange: () -> Unit): View = with(a) {
     if (qty <= 0) {
         pillButton(if (p.minQty > 1) tr("ADD ${p.minQty}", "${p.minQty} जोड़ें") else tr("ADD", "जोड़ें"), Ui.SUN, Ui.TEXT, 40) {
             Cart.setQty(a, p, min); onChange()
-        }.apply { minWidth = dp(96) }
+        }.apply { minWidth = dp(84) }
     } else horizontal {
         background = rounded(0xFFE8F3EC.toInt(), dpf(20f))
         fun step(res: Int, block: () -> Unit) = icon(res, Ui.BRAND, 40).apply {
             setPadding(dp(10), dp(10), dp(10), dp(10)); setOnClickListener { block() }
         }
+        // Pallets go up and down a whole pallet at a time.
+        val stepBy = if (p.isPallet && min > 1) min else 1.0
         addView(step(R.drawable.ic_minus) {
-            val next = qty - 1
+            val next = qty - stepBy
             Cart.setQty(a, p, if (next < min) 0.0 else next); onChange()
         })
         addView(text(Fmt.qty(qty), 16f, Ui.BRAND_DARK, bold = true) {
             gravity = Gravity.CENTER
-            minWidth = dp(40)
+            minWidth = dp(44)
+            // Looks tappable: tap to type the quantity.
+            paintFlags = paintFlags or android.graphics.Paint.UNDERLINE_TEXT_FLAG
             setOnClickListener { askQty(a, p.title, p.unit, qty) { v -> Cart.setQty(a, p, if (v > 0 && v < min) min else v); onChange() } }
         })
-        addView(step(R.drawable.ic_plus) { Cart.setQty(a, p, qty + 1); onChange() })
+        addView(step(R.drawable.ic_plus) { Cart.setQty(a, p, qty + stepBy); onChange() })
     }
 }
 

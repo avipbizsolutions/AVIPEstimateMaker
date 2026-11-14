@@ -32,10 +32,6 @@ class MainActivity : AppCompatActivity() {
 
         val root = vertical()
         cartIcon = cartButton()
-        val refreshBtn = icon(R.drawable.ic_refresh, Color.WHITE, 44).apply {
-            setPadding(dp(10), dp(10), dp(10), dp(10))
-            setOnClickListener { refreshAll(true) }
-        }
         val profileBtn = icon(R.drawable.ic_person, Color.WHITE, 44).apply {
             setPadding(dp(10), dp(10), dp(10), dp(10))
             setOnClickListener { startActivity(Intent(this@MainActivity, ProfileActivity::class.java)) }
@@ -43,7 +39,7 @@ class MainActivity : AppCompatActivity() {
         root.addView(topBar("Bihar Solar Circle",
             if (Session.isTeam(this)) tr("AVIP Team", "AVIP टीम") + " · " + Session.teamName(this) + " (" + Session.teamRoleLabel(this) + ")"
             else tr("B2B Solar Tools by AVIP", "AVIP के B2B सोलर टूल्स"), showBack = false,
-            right = listOf(langToggle(), refreshBtn, profileBtn, cartIcon)))
+            right = listOf(profileBtn, cartIcon)))
 
         content = vertical(14)
         root.addView(pullToRefresh(ScrollView(this).apply { addView(content) }) { reload(true) }, lp(MATCH, 0, 1f))
@@ -73,8 +69,12 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /** Language is switched on the profile screen: redraw home when coming back. */
+    private val startedHindi = Lang.hindi
+
     override fun onResume() {
         super.onResume()
+        if (Lang.hindi != startedHindi) { recreate(); return }
         Cart.addListener(cartListener)
         refreshCart()
         build()

@@ -147,7 +147,7 @@ class EstimateActivity : AppCompatActivity() {
                 }, lp(0, WRAP, 1f).margins(context, l = 10))
                 addView(icon(R.drawable.ic_delete, Ui.DANGER, 36).apply {
                     setPadding(dp(8), dp(8), dp(8), dp(8))
-                    setOnClickListener { Cart.remove(this@EstimateActivity, l); render() }
+                    setOnClickListener { removeWithUndo(l) }
                 })
             })
             addView(horizontal {
@@ -156,30 +156,49 @@ class EstimateActivity : AppCompatActivity() {
                     addView(icon(R.drawable.ic_minus, Ui.BRAND, 36).apply {
                         setPadding(dp(9), dp(9), dp(9), dp(9))
                         setOnClickListener {
-                            val next = l.qty - 1
+                            // Pallets step a whole pallet at a time.
+                            val next = l.qty - (if (l.minQty > 1) l.minQty else 1.0)
                             if (next < maxOf(l.minQty, 1.0)) return@setOnClickListener
                             l.qty = next; Cart.changed(this@EstimateActivity); render()
                         }
                     })
                     addView(text(Fmt.qty(l.qty), 15f, Ui.BRAND_DARK, bold = true) {
-                        gravity = Gravity.CENTER; minWidth = dp(40)
+                        gravity = Gravity.CENTER; minWidth = dp(44)
+                        paintFlags = paintFlags or android.graphics.Paint.UNDERLINE_TEXT_FLAG
                         setOnClickListener {
                             askQty(this@EstimateActivity, l.name, l.unit, l.qty) { v ->
-                                if (v <= 0) Cart.remove(this@EstimateActivity, l)
-                                else { l.qty = maxOf(v, l.minQty); Cart.changed(this@EstimateActivity) }
-                                render()
+                                if (v <= 0) removeWithUndo(l)
+                                else { l.qty = maxOf(v, l.minQty); Cart.changed(this@EstimateActivity); render() }
                             }
                         }
                     })
                     addView(icon(R.drawable.ic_plus, Ui.BRAND, 36).apply {
                         setPadding(dp(9), dp(9), dp(9), dp(9))
-                        setOnClickListener { l.qty += 1; Cart.changed(this@EstimateActivity); render() }
+                        setOnClickListener { l.qty += (if (l.minQty > 1) l.minQty else 1.0); Cart.changed(this@EstimateActivity); render() }
                     })
                 })
                 addView(text(l.unit, 12f, Ui.MUTED), lp(0, WRAP, 1f).margins(context, l = 8))
                 addView(text(Fmt.inr(r.amount, true), 16f, Ui.BRAND_DARK, bold = true))
             }, lp().margins(context, t = 8))
         }
+    }
+
+    /** Removes a line, with a few seconds to undo. */
+    private fun removeWithUndo(l: Line) {
+        val at = Cart.lines.indexOf(l)
+        Cart.remove(this, l)
+        render()
+        com.google.android.material.snackbar.Snackbar
+            .make(findViewById(android.R.id.content), tr("Removed ", "हटाया: ") + l.name, com.google.android.material.snackbar.Snackbar.LENGTH_LONG)
+            .setAction(tr("UNDO", "वापस लाएं")) {
+                if (Cart.lines.none { it.key == l.key }) {
+                    Cart.lines.add(at.coerceIn(0, Cart.lines.size), l)
+                    Cart.changed(this)
+                    render()
+                }
+            }
+            .setActionTextColor(Ui.SUN)
+            .show()
     }
 
     private fun renderTotals(t: Totals) {
