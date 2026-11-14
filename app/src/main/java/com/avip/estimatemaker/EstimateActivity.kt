@@ -321,6 +321,14 @@ class EstimateActivity : AppCompatActivity() {
                 "Hello AVIP, I am ${Vendor.contact(this)} from ${Vendor.company(this)}. Sharing cost estimate ${doc.number}. I need help regarding order placement.")
         }, lp().margins(this, b = 8))
         sheet.addView(pillButton(tr("Share…", "भेजें…"), 0xFFEFF3F1.toInt(), Ui.TEXT) { EstimateStore.share(this, file, msg) }, lp().margins(this, b = 8))
+        sheet.addView(pillButton(tr("Save & close", "सेव करके बंद करें"), 0xFFEFF3F1.toInt(), Ui.TEXT) {
+            // Already saved in My Cost Estimates; empty the cart and go back home.
+            Cart.clear(this); if (team) TeamTarget.clear(this)
+            dialog.dismiss()
+            Toast.makeText(this, tr("Saved in My Cost Estimates", "मेरे लागत अनुमान में सेव हो गया"), Toast.LENGTH_SHORT).show()
+            startActivity(Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP))
+            finish()
+        }, lp().margins(this, b = 8))
         sheet.addView(pillButton(tr("New cost estimate", "नया लागत अनुमान"), Color.WHITE, Ui.BRAND) {
             Cart.clear(this); dialog.dismiss()
             if (team) {

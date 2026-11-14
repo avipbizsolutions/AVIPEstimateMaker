@@ -79,45 +79,59 @@ object EstimateStore {
     }
 
     /** Sends the PDF straight to a WhatsApp chat (falls back to the share sheet). */
-    fun whatsapp(a: Activity, file: File, number: String, message: String) {
+    private val WA = listOf("com.whatsapp" to "WhatsApp", "com.whatsapp.w4b" to "WhatsApp Business")
+
+    private fun installed(a: Activity, pkg: String) = try {
+        a.packageManager.getPackageInfo(pkg, 0); true
+    } catch (_: Exception) { false }
+
+    /** Asks "WhatsApp or WhatsApp Business?" when both are on the phone; null when neither is. */
+    fun pickWhatsApp(a: Activity, then: (String?) -> Unit) {
+        val apps = WA.filter { installed(a, it.first) }
+        when (apps.size) {
+            0 -> then(null)
+            1 -> then(apps[0].first)
+            else -> androidx.appcompat.app.AlertDialog.Builder(a)
+                .setTitle(tr("Send with", "किससे भेजें"))
+                .setItems(apps.map { it.second }.toTypedArray()) { _, k -> then(apps[k].first) }
+                .setNegativeButton(tr("Cancel", "रद्द करें"), null)
+                .show()
+        }
+    }
+
+    private fun waDigits(number: String): String {
         var digits = number.filter { it.isDigit() }
         if (digits.length == 10) digits = "91$digits"
-        for (pkg in listOf("com.whatsapp", "com.whatsapp.w4b")) {
+        return digits
+    }
+
+    fun whatsapp(a: Activity, file: File, number: String, message: String) {
+        val digits = waDigits(number)
+        pickWhatsApp(a) { pkg ->
+            if (pkg == null) { share(a, file, message); return@pickWhatsApp }
             val i = Intent(Intent.ACTION_SEND).setType("application/pdf")
                 .setPackage(pkg)
                 .putExtra(Intent.EXTRA_STREAM, uri(a, file))
                 .putExtra(Intent.EXTRA_TEXT, message)
                 .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             if (digits.isNotEmpty()) i.putExtra("jid", "$digits@s.whatsapp.net")
+            try { a.startActivity(i) } catch (_: ActivityNotFoundException) { share(a, file, message) }
+        }
+    }
+
+    fun chatAvip(a: Activity, message: String) =
+        chatNumber(a, Catalog.settings["whatsapp"].ifBlank { "919288176289" }, message)
+
+    fun chatNumber(a: Activity, number: String, message: String) {
+        val url = Uri.parse("https://wa.me/${waDigits(number)}?text=" + Uri.encode(message))
+        pickWhatsApp(a) { pkg ->
+            val i = Intent(Intent.ACTION_VIEW, url)
+            if (pkg != null) i.setPackage(pkg)
             try {
                 a.startActivity(i)
-                return
             } catch (_: ActivityNotFoundException) {
+                Toast.makeText(a, tr("WhatsApp not found", "WhatsApp नहीं मिला"), Toast.LENGTH_SHORT).show()
             }
-        }
-        share(a, file, message)
-    }
-
-    /** Opens a WhatsApp chat with AVIP with a typed message (no file). */
-    fun chatAvip(a: Activity, message: String) {
-        val number = Catalog.settings["whatsapp"].filter { it.isDigit() }.ifBlank { "919288176289" }
-        val i = Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/$number?text=" + Uri.encode(message)))
-        try {
-            a.startActivity(i)
-        } catch (_: ActivityNotFoundException) {
-            Toast.makeText(a, tr("WhatsApp not found", "WhatsApp नहीं मिला"), Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    /** Opens a WhatsApp chat with any Indian mobile number and a typed message. */
-    fun chatNumber(a: Activity, number: String, message: String) {
-        var digits = number.filter { it.isDigit() }
-        if (digits.length == 10) digits = "91$digits"
-        val i = Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/$digits?text=" + Uri.encode(message)))
-        try {
-            a.startActivity(i)
-        } catch (_: ActivityNotFoundException) {
-            Toast.makeText(a, tr("WhatsApp not found", "WhatsApp नहीं मिला"), Toast.LENGTH_SHORT).show()
         }
     }
 
