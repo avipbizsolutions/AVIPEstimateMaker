@@ -36,7 +36,7 @@ const SAATHI_COLS = ['Registered On', 'Surya Saathi Company', 'Contact Person', 
   'Device ID', 'App Version', 'Address', 'Device', 'Android', 'Last Login', 'Logins', 'Status',
   'Reset PIN', 'Added By', 'PIN (scrambled)', 'Must Change PIN'];
 const QUOTE_COLS = ['Created On', 'Quotation No', 'Surya Saathi Company', 'Contact Person', 'Mobile', 'GSTIN',
-  'Items', 'Sub Total', 'GST', 'Grand Total', 'Made By', 'Special Rates'];
+  'Items', 'Sub Total', 'GST', 'Grand Total', 'Made By', 'Special Rates', 'Device ID', 'Estimate Data (app)'];
 
 function doPost(e) {
   const lock = LockService.getScriptLock();
@@ -49,6 +49,7 @@ function doPost(e) {
     if (d.kind === 'teamSetPin') return reply(Object.assign({ ok: true }, authSetPin_(AUTH_APP, d)));
     if (d.kind === 'teamMe') return reply({ ok: true, user: teamUser(d, true) });
     if (d.kind === 'saathiList') { teamUser(d); return reply({ ok: true, saathis: saathiList() }); }
+    if (d.kind === 'customerEstimates') { teamUser(d); return reply({ ok: true, estimates: customerEstimates(d) }); }
 
     lock.waitLock(20000);
     const book = SpreadsheetApp.openById(SHEET_ID);
@@ -85,17 +86,23 @@ function doPost(e) {
         try { const u = teamUser({ token: d.teamToken }); madeBy = u.name + ' (AVIP ' + (isFounder(u) ? 'Founder' : 'Manager') + ')'; }
         catch (_) { madeBy = 'AVIP Team (login expired)'; }
       }
-      // The phone may resend after a slow reply: log each estimate once (number + customer mobile,
-      // as two phones can use the same number). An edited estimate keeps its number: its row is updated.
+      // The phone may resend after a slow reply: log each estimate once. The key is number + customer
+      // mobile + phone, as two phones can use the same number. An edited estimate keeps its number:
+      // its row is updated in place.
       const last = log.getLastRow();
-      const key = clean(d.number) + '|' + last10(d.mobile);
-      const keys = last > 1 ? log.getRange(2, 2, last - 1, 4).getValues().map(r => String(r[0]) + '|' + last10(r[3])) : [];
-      const at = keys.lastIndexOf(key);
+      const dev = clean(d.installId);
+      const keyOf = r => String(r[1]) + '|' + last10(r[4]) + '|' + String(r[12] || '');
+      const key = clean(d.number) + '|' + last10(d.mobile) + '|' + dev;
+      const old = clean(d.number) + '|' + last10(d.mobile) + '|';
+      const keys = last > 1 ? log.getRange(2, 1, last - 1, 13).getValues().map(keyOf) : [];
+      let at = keys.lastIndexOf(key);
+      if (at < 0 && d.revised) at = keys.lastIndexOf(old);
       const row = [
         new Date(), clean(d.number), clean(d.company), clean(d.contact), last10(d.mobile),
         clean(d.gst), clean(d.items, 2000),
         Number(d.subTotal) || 0, Number(d.gstAmount) || 0, Number(d.grandTotal) || 0,
-        madeBy + (d.revised ? ' (edited)' : ''), clean(d.special, 500),
+        madeBy + (d.revised ? ' (edited)' : ''), clean(d.special, 500), dev,
+        String(d.doc || '').slice(0, 45000),
       ];
       if (at >= 0) {
         if (d.revised) log.getRange(at + 2, 1, 1, row.length).setValues([row]);
@@ -278,6 +285,24 @@ function teamUser(d, allowTempPin) {
 }
 
 /** All Surya Saathis, newest first, for the team's customer list. */
+/** AVIP Team: every cost estimate logged for one B2B customer (by any team member or the Saathi). */
+function customerEstimates(d) {
+  const mobile = last10(d.mobile);
+  if (mobile.length !== 10) return [];
+  const log = SpreadsheetApp.openById(SHEET_ID).getSheetByName('Quotations Log');
+  if (!log || log.getLastRow() < 2) return [];
+  return log.getRange(2, 1, log.getLastRow() - 1, 14).getValues()
+    .filter(r => last10(r[4]) === mobile)
+    .map(r => ({
+      createdAt: r[0] instanceof Date ? r[0].getTime() : 0,
+      number: String(r[1] || ''), company: String(r[2] || ''), items: String(r[6] || ''),
+      grandTotal: Number(r[9]) || 0, madeBy: String(r[10] || ''),
+      mine: !!clean(d.installId) && String(r[12] || '') === clean(d.installId),
+      doc: String(r[13] || ''),
+    }))
+    .sort((a, b) => b.createdAt - a.createdAt).slice(0, 200);
+}
+
 function saathiList() {
   const sheet = saathiSheet(SpreadsheetApp.openById(SHEET_ID));
   return data(sheet).filter(r => last10(r[3]).length === 10).map(r => ({

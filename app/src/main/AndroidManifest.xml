@@ -45,6 +45,7 @@
             android:exported="false"
             android:windowSoftInputMode="adjustResize" />
         <activity android:name=".HistoryActivity" android:exported="false" />
+        <activity android:name=".CustomerEstimatesActivity" android:exported="false" />
         <activity android:name=".SaathiListActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
         <activity android:name=".SetPinActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
         <activity android:name=".LoginActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />

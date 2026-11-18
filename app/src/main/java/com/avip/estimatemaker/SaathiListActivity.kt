@@ -165,6 +165,7 @@ class SaathiListActivity : AppCompatActivity() {
         setOnClickListener {
             if (blocked) Toast.makeText(this@SaathiListActivity, tr("This account is blocked in the Surya Saathi sheet", "यह अकाउंट Surya Saathi शीट में रोका गया है"), Toast.LENGTH_SHORT).show()
             else if (pick) choose(b)
+            else CustomerEstimatesActivity.open(this@SaathiListActivity, b)
         }
     }
 
@@ -193,8 +194,8 @@ class SaathiListActivity : AppCompatActivity() {
     private fun manage(b: Buyer) {
         AlertDialog.Builder(this)
             .setTitle(b.company)
-            .setItems(arrayOf(tr("Edit details", "जानकारी बदलें"), tr("Delete Surya Saathi", "सूर्य साथी हटाएं"))) { _, i ->
-                if (i == 0) customerDialog(b) else confirmDelete(b)
+            .setItems(arrayOf(tr("Cost estimates by the team", "टीम के लागत अनुमान"), tr("Edit details", "जानकारी बदलें"), tr("Delete Surya Saathi", "सूर्य साथी हटाएं"))) { _, i ->
+                when (i) { 0 -> CustomerEstimatesActivity.open(this, b); 1 -> customerDialog(b); else -> confirmDelete(b) }
             }.show()
     }
 

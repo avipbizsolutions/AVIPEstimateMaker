@@ -291,6 +291,7 @@ class EstimateActivity : AppCompatActivity() {
                 .put("kind", "estimate")
                 .put("number", doc.number)
                 .put("revised", editing.isNotBlank())
+                .put("doc", doc.toJson().toString())
                 .put("company", b.company)
                 .put("contact", b.contact)
                 .put("mobile", b.mobile)
