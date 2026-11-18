@@ -39,7 +39,7 @@ class EstimateActivity : AppCompatActivity() {
             }
         }
         val root = vertical()
-        root.addView(topBar(tr("Your Cost Estimate", "आपका लागत अनुमान"), tr("AVIP B2B rates for ", "AVIP B2B रेट: ") + buyer().company, right = listOf(clear)))
+        root.addView(topBar((if (Cart.editing(this).isNotBlank()) tr("Editing ", "बदल रहे हैं: ") + Cart.editing(this) else tr("Your Cost Estimate", "आपका लागत अनुमान")), tr("AVIP B2B rates for ", "AVIP B2B रेट: ") + buyer().company, right = listOf(clear)))
         body = vertical(14)
         root.addView(pullToRefresh(ScrollView(this).apply { addView(body) }) { Catalog.refresh(this); render() }, lp(MATCH, 0, 1f))
         totalsBox = vertical { setPadding(dp(16), dp(12), dp(16), dp(14)); setBackgroundColor(Color.WHITE); elevation = dpf(10f) }
@@ -215,7 +215,7 @@ class EstimateActivity : AppCompatActivity() {
         totalsBox.addView(row(tr("Sub total", "उप-योग"), Fmt.inr(t.subTotal, true)))
         totalsBox.addView(row("GST", Fmt.inr(t.gstTotal, true)))
         totalsBox.addView(row(tr("Grand total", "कुल राशि"), Fmt.inr(t.grandTotal), strong = true), lp().margins(this, t = 4))
-        totalsBox.addView(pillButton(tr("Create Cost Estimate PDF", "लागत अनुमान PDF बनाएं"), Ui.BRAND, Color.WHITE, 52) { createPdf() }, lp().margins(this, t = 10))
+        totalsBox.addView(pillButton(if (Cart.editing(this).isNotBlank()) tr("Update ${Cart.editing(this)}", "${Cart.editing(this)} अपडेट करें") else tr("Create Cost Estimate PDF", "लागत अनुमान PDF बनाएं"), Ui.BRAND, Color.WHITE, 52) { createPdf() }, lp().margins(this, t = 10))
     }
 
     /** AVIP Team: set a special rate on one line (or go back to the sheet rate). */
@@ -272,8 +272,9 @@ class EstimateActivity : AppCompatActivity() {
         if (Cart.count == 0) return
         val t = Cart.totals()
         val b = buyer()
+        val editing = Cart.editing(this)
         val doc = EstimateDoc(
-            number = EstimateStore.nextNumber(this),
+            number = editing.ifBlank { EstimateStore.nextNumber(this) },
             createdAt = System.currentTimeMillis(),
             lines = Cart.lines.map { it.copy() },
             grandTotal = t.grandTotal,
@@ -289,6 +290,7 @@ class EstimateActivity : AppCompatActivity() {
             Remote.queue(this@EstimateActivity, JSONObject()
                 .put("kind", "estimate")
                 .put("number", doc.number)
+                .put("revised", editing.isNotBlank())
                 .put("company", b.company)
                 .put("contact", b.contact)
                 .put("mobile", b.mobile)
@@ -307,7 +309,7 @@ class EstimateActivity : AppCompatActivity() {
         val msg = "Cost estimate ${doc.number} from AVIP Business Solutions LLP for ${b.company}"
         val sheet = vertical(20) {
             addView(iconBadge("kit", 54).also { (it.layoutParams as LinearLayout.LayoutParams).gravity = Gravity.CENTER_HORIZONTAL })
-            addView(text(tr("Cost estimate ready!", "लागत अनुमान तैयार!"), 20f, Ui.TEXT, bold = true) { gravity = Gravity.CENTER }, lp().margins(context, t = 10))
+            addView(text(if (Cart.editing(this@EstimateActivity) == doc.number) tr("Cost estimate updated!", "लागत अनुमान अपडेट हुआ!") else tr("Cost estimate ready!", "लागत अनुमान तैयार!"), 20f, Ui.TEXT, bold = true) { gravity = Gravity.CENTER }, lp().margins(context, t = 10))
             addView(text("${doc.number} · ${Fmt.inr(doc.grandTotal)}", 13f, Ui.MUTED) { gravity = Gravity.CENTER }, lp().margins(context, b = 14))
         }
         val dialog = AlertDialog.Builder(this).setView(sheet).create()

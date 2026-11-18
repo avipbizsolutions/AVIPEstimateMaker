@@ -38,7 +38,15 @@ object Cart {
             .putString("cart", o.toString()).apply()
     }
 
+    /** The saved cost estimate number being edited (its PDF is replaced on save), or "" for a new one. */
+    fun editing(context: Context): String =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString("editing", "") ?: ""
+
+    private fun setEditing(context: Context, number: String) =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString("editing", number).apply()
+
     fun changed(context: Context) {
+        if (lines.isEmpty()) setEditing(context, "")
         save(context)
         listeners.toList().forEach { it() }
     }
@@ -87,8 +95,9 @@ object Cart {
     }
 
     /** Puts a saved quotation back into the cart for editing. */
-    fun loadFrom(context: Context, doc: EstimateDoc) {
+    fun loadFrom(context: Context, doc: EstimateDoc, edit: Boolean = false) {
         lines.clear()
+        setEditing(context, if (edit) doc.number else "")
         lines += doc.lines.filter { it.productId != null }.map { it.copy() }
             .onEach { if (!Session.isTeam(context)) it.special = false }
         reprice(context)

@@ -85,15 +85,23 @@ function doPost(e) {
         try { const u = teamUser({ token: d.teamToken }); madeBy = u.name + ' (AVIP ' + (isFounder(u) ? 'Founder' : 'Manager') + ')'; }
         catch (_) { madeBy = 'AVIP Team (login expired)'; }
       }
-      // The phone may resend after a slow reply: log each estimate number once.
+      // The phone may resend after a slow reply: log each estimate once (number + customer mobile,
+      // as two phones can use the same number). An edited estimate keeps its number: its row is updated.
       const last = log.getLastRow();
-      if (last > 1 && log.getRange(2, 2, last - 1, 1).getValues().some(r => String(r[0]) === clean(d.number))) return reply({ ok: true, duplicate: true });
-      log.appendRow([
+      const key = clean(d.number) + '|' + last10(d.mobile);
+      const keys = last > 1 ? log.getRange(2, 2, last - 1, 4).getValues().map(r => String(r[0]) + '|' + last10(r[3])) : [];
+      const at = keys.lastIndexOf(key);
+      const row = [
         new Date(), clean(d.number), clean(d.company), clean(d.contact), last10(d.mobile),
         clean(d.gst), clean(d.items, 2000),
         Number(d.subTotal) || 0, Number(d.gstAmount) || 0, Number(d.grandTotal) || 0,
-        madeBy, clean(d.special, 500),
-      ]);
+        madeBy + (d.revised ? ' (edited)' : ''), clean(d.special, 500),
+      ];
+      if (at >= 0) {
+        if (d.revised) log.getRange(at + 2, 1, 1, row.length).setValues([row]);
+        return reply({ ok: true, duplicate: !d.revised });
+      }
+      log.appendRow(row);
     } else if (d.kind === 'delete') {
       // "Delete my account": remove the Surya Saathi's registration and estimate rows,
       // and keep only a dated note that a deletion was done.

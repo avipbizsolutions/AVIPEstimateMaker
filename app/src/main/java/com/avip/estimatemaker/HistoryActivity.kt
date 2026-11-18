@@ -63,17 +63,17 @@ class HistoryActivity : AppCompatActivity() {
 
     private fun actions(doc: EstimateDoc) {
         val file = EstimateStore.pdfFile(this, doc.number)
-        val options = arrayOf(tr("Open PDF", "PDF खोलें"), tr("Share PDF", "PDF भेजें"), tr("Edit as new cost estimate", "नए अनुमान के रूप में बदलें"), tr("Delete", "मिटाएं"))
+        val options = arrayOf(tr("Open PDF", "PDF खोलें"), tr("Share PDF", "PDF भेजें"), tr("Edit this cost estimate", "यह लागत अनुमान बदलें"), tr("Edit as new cost estimate", "नए अनुमान के रूप में बदलें"), tr("Delete", "मिटाएं"))
         AlertDialog.Builder(this)
             .setTitle(doc.number)
             .setItems(options) { _, which ->
                 when (which) {
                     0 -> if (file.exists()) EstimateStore.open(this, file) else missing()
                     1 -> if (file.exists()) EstimateStore.share(this, file, "Cost estimate ${doc.number}") else missing()
-                    2 -> {
+                    2, 3 -> {
                         val go = {
                             if (Session.isTeam(this)) doc.buyer?.let { TeamTarget.set(this, it) }
-                            Cart.loadFrom(this, doc)
+                            Cart.loadFrom(this, doc, edit = which == 2)
                             startActivity(Intent(this, EstimateActivity::class.java))
                         }
                         if (Cart.count > 0) AlertDialog.Builder(this)
@@ -82,7 +82,7 @@ class HistoryActivity : AppCompatActivity() {
                             .setNegativeButton(tr("Cancel", "रद्द करें"), null).show()
                         else go()
                     }
-                    3 -> AlertDialog.Builder(this)
+                    4 -> AlertDialog.Builder(this)
                         .setMessage(tr("Delete ${doc.number}?", "${doc.number} मिटाएं?"))
                         .setPositiveButton(tr("Delete", "मिटाएं")) { _, _ -> EstimateStore.delete(this, doc); render() }
                         .setNegativeButton(tr("Cancel", "रद्द करें"), null).show()
