@@ -98,7 +98,7 @@ class PdfMaker(private val context: Context) {
         toLines += listOf(buyer.contact, if (buyer.mobile.isNotBlank()) "Mob: " + buyer.mobile else "").filter { it.isNotBlank() }.joinToString("  ·  ")
         val place = listOf(buyer.address, buyer.city).filter { it.isNotBlank() }.joinToString(", ")
         if (place.isNotBlank()) toLines += place
-        if (buyer.gst.isNotBlank()) toLines += "GSTIN: ${buyer.gst}"
+        if (buyer.gst.isNotBlank()) toLines += "GSTIN: ${buyer.gst}" + (buyer.gst.take(2).takeIf { it.all(Char::isDigit) && it.length == 2 }?.let { "  ·  State: " + stateName(it) } ?: "")
         if (est.madeBy.isNotBlank()) toLines += "Prepared by: ${est.madeBy}, AVIP Business Solutions LLP"
         val boxTop = y
         val half = (right - margin - 12f) / 2f
@@ -108,17 +108,18 @@ class PdfMaker(private val context: Context) {
         toLines.forEachIndexed { i, t ->
             ly = drawWrapped(t, margin + 10f, ly, half - 20f, paint(if (i == 0) 10.5f else 8.5f, ink, i == 0), if (i == 0) 13f else 11f)
         }
-        // System summary on the right
+        // Estimate details on the right
+        val sellerState = s["gstin"].take(2).ifBlank { "10" }
+        val buyerState = buyer.gst.take(2).takeIf { it.length == 2 && it.all(Char::isDigit) } ?: sellerState
+        val interState = buyerState != sellerState
         var ry = boxTop + 14f
         val rx = margin + half + 22f
+        canvas.drawText("ESTIMATE DETAILS", rx, ry, paint(7.5f, muted, true)); ry += 14f
+        canvas.drawText("Place of supply: ${stateName(buyerState)}", rx, ry, paint(8.5f, ink)); ry += 11f
+        canvas.drawText("Items: ${est.lines.size}", rx, ry, paint(8.5f, ink)); ry += 11f
         if (totals.kwp > 0) {
-            canvas.drawText("SOLAR SYSTEM", rx, ry, paint(7.5f, muted, true)); ry += 16f
-            canvas.drawText("${Fmt.num(totals.kwp)} kWp", rx, ry, paint(15f, brand, true)); ry += 14f
             val panels = est.lines.filter { it.wp > 0 }.sumOf { it.qty }
-            canvas.drawText("${Fmt.qty(panels)} solar panels", rx, ry, paint(8.5f, ink)); ry += 11f
-        } else {
-            canvas.drawText("ITEMS", rx, ry, paint(7.5f, muted, true)); ry += 16f
-            canvas.drawText("${est.lines.size}", rx, ry, paint(15f, brand, true)); ry += 14f
+            canvas.drawText("Solar: ${Fmt.num(totals.kwp)} kWp (${Fmt.qty(panels)} panels)", rx, ry, paint(8.5f, brand, true)); ry += 11f
         }
         val boxBottom = maxOf(ly, ry) + 4f
         val boxPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = rule; style = Paint.Style.STROKE; strokeWidth = 0.8f }
@@ -128,80 +129,116 @@ class PdfMaker(private val context: Context) {
 
         // ---------- Items table ----------
         val cols = listOf(
-            Col("#", 22f, Paint.Align.CENTER), Col("Item", 0f, Paint.Align.LEFT),
-            Col("Qty", 46f, Paint.Align.RIGHT), Col("Rate", 70f, Paint.Align.RIGHT),
-            Col("GST", 34f, Paint.Align.RIGHT), Col("Amount", 80f, Paint.Align.RIGHT),
+            Col("#", 18f, Paint.Align.CENTER), Col("Item name", 0f, Paint.Align.LEFT),
+            Col("HSN/ SAC", 50f, Paint.Align.LEFT), Col("Quantity", 44f, Paint.Align.RIGHT),
+            Col("Unit", 34f, Paint.Align.CENTER), Col("Price/ Unit", 62f, Paint.Align.RIGHT),
+            Col("GST", 62f, Paint.Align.RIGHT), Col("Amount", 70f, Paint.Align.RIGHT),
         )
         val fixed = cols.sumOf { it.w.toDouble() }.toFloat()
         val itemW = right - margin - fixed
         val widths = cols.map { if (it.w == 0f) itemW else it.w }
+        fun tx(i: Int, x: Float) = when (cols[i].align) { Paint.Align.LEFT -> x + 5f; Paint.Align.RIGHT -> x + widths[i] - 5f; else -> x + widths[i] / 2 }
 
         fun header() {
             canvas.drawRect(margin, y, right, y + 20f, Paint().apply { color = brand })
             var x = margin
             cols.forEachIndexed { i, c ->
-                val tx = when (c.align) { Paint.Align.LEFT -> x + 6f; Paint.Align.RIGHT -> x + widths[i] - 6f; else -> x + widths[i] / 2 }
-                canvas.drawText(c.title, tx, y + 13.5f, paint(8f, Color.WHITE, true, c.align))
+                canvas.drawText(c.title, tx(i, x), y + 13.5f, paint(7.8f, Color.WHITE, true, c.align))
                 x += widths[i]
             }
             y += 20f
         }
         header()
 
-        val namePaint = paint(8.8f, ink, true)
-        val subPaint = paint(7.5f, muted)
+        val namePaint = paint(8.5f, ink, true)
+        val subPaint = paint(7.2f, muted)
+        val cell = paint(8.3f, ink)
         totals.rows.forEachIndexed { idx, r ->
             val l = r.line
-            val sub = listOf(l.spec, "per ${l.unit.lowercase()}").filter { it.isNotBlank() }.joinToString(" · ")
-            val nameLines = wrap(l.name, itemW - 12f, namePaint)
-            val subLines = if (sub.isBlank()) emptyList() else wrap(sub, itemW - 12f, subPaint)
-            val rowH = 8f + nameLines.size * 11f + subLines.size * 9.5f + 4f
+            val hsn = l.hsn.ifBlank { Catalog.byId(l.productId)?.let { Catalog.hsnFor(it.category, it.title) } ?: Catalog.hsnFor(l.spec.substringBefore(" · "), l.name) }
+            val sub = l.spec.substringAfter(" · ", "")
+            val nameLines = wrap(l.name, itemW - 10f, namePaint)
+            val subLines = if (sub.isBlank()) emptyList() else wrap(sub, itemW - 10f, subPaint)
+            val rowH = maxOf(8f + nameLines.size * 10.5f + subLines.size * 9f, 8f + 2 * 10f) + 4f
             if (y + rowH > pageH - 70f) { newPage(); header() }
             if (idx % 2 == 1) canvas.drawRect(margin, y, right, y + rowH, Paint().apply { color = 0xFFF6F9F7.toInt() })
             var x = margin
-            val base = y + 15f
+            val base = y + 14f
             cols.forEachIndexed { i, c ->
-                val w = widths[i]
-                val tx = when (c.align) { Paint.Align.LEFT -> x + 6f; Paint.Align.RIGHT -> x + w - 6f; else -> x + w / 2 }
+                val t = tx(i, x)
+                val al = paint(8.3f, ink, align = c.align)
                 when (c.title) {
-                    "#" -> canvas.drawText("${idx + 1}", tx, base, paint(8.5f, muted, align = c.align))
-                    "Item" -> {
+                    "#" -> canvas.drawText("${idx + 1}", t, base, paint(8.3f, muted, align = c.align))
+                    "Item name" -> {
                         var iy = base
-                        nameLines.forEach { canvas.drawText(it, tx, iy, namePaint); iy += 11f }
-                        subLines.forEach { canvas.drawText(it, tx, iy - 1f, subPaint); iy += 9.5f }
+                        nameLines.forEach { canvas.drawText(it, t, iy, namePaint); iy += 10.5f }
+                        subLines.forEach { canvas.drawText(it, t, iy - 1f, subPaint); iy += 9f }
                     }
-                    "Qty" -> canvas.drawText(Fmt.qty(l.qty), tx, base, paint(8.5f, ink, align = c.align))
-                    "Rate" -> canvas.drawText(Fmt.inr(r.rate, true), tx, base, paint(8.5f, ink, align = c.align))
-                    "GST" -> canvas.drawText("${Fmt.num(l.gst)}%", tx, base, paint(8.5f, ink, align = c.align))
-                    "Amount" -> canvas.drawText(Fmt.inr(r.amount, true), tx, base, paint(8.8f, ink, true, c.align))
+                    "HSN/ SAC" -> canvas.drawText(hsn, t, base, cell)
+                    "Quantity" -> canvas.drawText(Fmt.qty(l.qty), t, base, al)
+                    "Unit" -> canvas.drawText(l.unit, t, base, al)
+                    "Price/ Unit" -> canvas.drawText(Fmt.inr(r.rate, true), t, base, al)
+                    "GST" -> {
+                        canvas.drawText(Fmt.inr(r.gstAmount, true), t, base, al)
+                        canvas.drawText("(${Fmt.num(l.gst)}%)", t, base + 10f, paint(7.5f, muted, align = c.align))
+                    }
+                    "Amount" -> canvas.drawText(Fmt.inr(r.amount + r.gstAmount, true), t, base, paint(8.5f, ink, true, c.align))
                 }
-                x += w
+                x += widths[i]
             }
             y += rowH
             canvas.drawLine(margin, y, right, y, Paint().apply { color = rule; strokeWidth = 0.5f })
         }
+        // Total row
+        if (y + 20f > pageH - 70f) { newPage(); header() }
+        run {
+            canvas.drawRect(margin, y, right, y + 20f, Paint().apply { color = brandLight })
+            var x = margin
+            cols.forEachIndexed { i, c ->
+                val t = tx(i, x)
+                val bold = paint(8.5f, ink, true, c.align)
+                when (c.title) {
+                    "Item name" -> canvas.drawText("Total", t, y + 13.5f, bold)
+                    "Quantity" -> canvas.drawText(Fmt.qty(est.lines.sumOf { it.qty }), t, y + 13.5f, bold)
+                    "GST" -> canvas.drawText(Fmt.inr(totals.gstTotal, true), t, y + 13.5f, bold)
+                    "Amount" -> canvas.drawText(Fmt.inr(totals.subTotal + totals.gstTotal, true), t, y + 13.5f, bold)
+                }
+                x += widths[i]
+            }
+            y += 20f
+            canvas.drawLine(margin, y, right, y, Paint().apply { color = brand; strokeWidth = 0.8f })
+        }
 
         // ---------- Totals ----------
-        val totalRows = mutableListOf<Triple<String, String, Boolean>>()
-        totalRows += Triple("Sub Total (before GST)", Fmt.inr(totals.subTotal, true), false)
-        totals.gstByRate.forEach { (rate, amt) -> totalRows += Triple("GST @ ${Fmt.num(rate)}%", Fmt.inr(amt, true), false) }
-        if (totals.roundOff != 0.0) totalRows += Triple("Round off", Fmt.inr(totals.roundOff, true), false)
+        val totalRows = mutableListOf<Pair<String, String>>()
+        totalRows += "Sub Total" to Fmt.inr(totals.subTotal, true)
+        totals.gstByRate.forEach { (rate, amt) ->
+            if (interState) totalRows += "IGST@${Fmt.num(rate)}%" to Fmt.inr(amt, true)
+            else {
+                val half1 = round2(amt / 2)
+                totalRows += "SGST@${Fmt.num(rate / 2)}%" to Fmt.inr(half1, true)
+                totalRows += "CGST@${Fmt.num(rate / 2)}%" to Fmt.inr(round2(amt - half1), true)
+            }
+        }
+        if (totals.roundOff != 0.0) totalRows += "Round off" to Fmt.inr(totals.roundOff, true)
         val needed = 30f + totalRows.size * 15f + 26f + 20f
         if (y + needed > pageH - 70f) newPage()
         y += 10f
         val tx1 = right - 230f
-        totalRows.forEach { (label, value, _) ->
+        val sumTop = y
+        totalRows.forEach { (label, value) ->
             canvas.drawText(label, tx1, y + 10f, paint(9f, muted))
             canvas.drawText(value, right - 6f, y + 10f, paint(9f, ink, align = Paint.Align.RIGHT))
             y += 15f
         }
         val gt = RectF(tx1 - 8f, y + 2f, right, y + 26f)
         canvas.drawRoundRect(gt, 6f, 6f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = brand })
-        canvas.drawText("Grand Total (incl. GST)", tx1, gt.top + 16f, paint(10f, Color.WHITE, true))
-        canvas.drawText(Fmt.inr(totals.grandTotal), right - 6f, gt.top + 16.5f, paint(12f, Color.WHITE, true, Paint.Align.RIGHT))
+        canvas.drawText("Total", tx1, gt.top + 16f, paint(10f, Color.WHITE, true))
+        canvas.drawText(Fmt.inr(totals.grandTotal, true), right - 6f, gt.top + 16.5f, paint(12f, Color.WHITE, true, Paint.Align.RIGHT))
         y = gt.bottom + 4f
         // amount in words on the left side
-        drawWrapped(Fmt.words(totals.grandTotal), margin, gt.top + 12f, tx1 - margin - 20f, paint(8f, muted), 10f)
+        canvas.drawText("ESTIMATE AMOUNT IN WORDS", margin, sumTop + 10f, paint(7.8f, brand, true))
+        drawWrapped(Fmt.words(totals.grandTotal), margin, sumTop + 24f, tx1 - margin - 20f, paint(8.5f, ink), 11f)
         y += 6f
 
         // ---------- Footer blocks ----------
@@ -229,6 +266,16 @@ class PdfMaker(private val context: Context) {
         out.outputStream().use { doc.writeTo(it) }
         doc.close()
     }
+
+    private fun stateName(code: String): String = code + "-" + (mapOf(
+        "01" to "Jammu & Kashmir", "02" to "Himachal Pradesh", "03" to "Punjab", "04" to "Chandigarh", "05" to "Uttarakhand",
+        "06" to "Haryana", "07" to "Delhi", "08" to "Rajasthan", "09" to "Uttar Pradesh", "10" to "Bihar", "11" to "Sikkim",
+        "12" to "Arunachal Pradesh", "13" to "Nagaland", "14" to "Manipur", "15" to "Mizoram", "16" to "Tripura",
+        "17" to "Meghalaya", "18" to "Assam", "19" to "West Bengal", "20" to "Jharkhand", "21" to "Odisha",
+        "22" to "Chhattisgarh", "23" to "Madhya Pradesh", "24" to "Gujarat", "26" to "Dadra & Nagar Haveli and Daman & Diu",
+        "27" to "Maharashtra", "29" to "Karnataka", "30" to "Goa", "32" to "Kerala", "33" to "Tamil Nadu",
+        "34" to "Puducherry", "35" to "Andaman & Nicobar", "36" to "Telangana", "37" to "Andhra Pradesh", "38" to "Ladakh",
+    )[code] ?: "")
 
     private data class Col(val title: String, val w: Float, val align: Paint.Align)
 

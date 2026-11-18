@@ -86,9 +86,11 @@ data class Line(
     val icon: String,
     /** AVIP Team set a special rate: fresh sheet prices don't overwrite it. */
     var special: Boolean = false,
+    /** HSN/SAC code printed on the estimate ("" on older lines: looked up when printing). */
+    var hsn: String = "",
 ) {
     fun toJson(): JSONObject = JSONObject()
-        .put("special", special)
+        .put("special", special).put("hsn", hsn)
         .put("key", key).put("productId", productId ?: JSONObject.NULL)
         .put("name", name).put("spec", spec).put("unit", unit)
         .put("price", price).put("gst", gst).put("qty", qty)
@@ -108,6 +110,7 @@ data class Line(
             minQty = o.optDouble("minQty", 1.0),
             icon = o.optString("icon", "other"),
             special = o.optBoolean("special", false),
+            hsn = o.optString("hsn"),
         )
 
         fun fromProduct(p: Product, qty: Double) = Line(
@@ -122,6 +125,7 @@ data class Line(
             wp = p.panelWp,
             minQty = p.minQty.toDouble().coerceAtLeast(1.0),
             icon = p.icon,
+            hsn = Catalog.hsnFor(p.category, p.title),
         )
     }
 }

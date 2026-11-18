@@ -19,6 +19,11 @@ object Catalog {
     private const val PRICES_TAB = "App Prices"
     private const val SETTINGS_TAB = "App Settings"
     private const val PHOTOS_TAB = "Product Photos"
+    private const val HSN_TAB = "HSN Codes"
+
+    /** A row of the "HSN Codes" tab: category, optional word in the product name, code. */
+    private class HsnRule(val category: String, val word: String, val code: String)
+    @Volatile private var hsnRules: List<HsnRule> = emptyList()
 
     /** Old-style row of the "Product Photos" tab: all [words] must appear in a product. */
     private class PhotoRule(val words: List<String>, val url: String)
@@ -46,6 +51,7 @@ object Catalog {
     private fun pricesFile(c: Context) = File(c.filesDir, "prices.csv")
     private fun settingsFile(c: Context) = File(c.filesDir, "settings.csv")
     private fun photosFile(c: Context) = File(c.filesDir, "photos.csv")
+    private fun hsnFile(c: Context) = File(c.filesDir, "hsn.csv")
 
     /** Loads the copy saved on the phone. Returns false if there is none. */
     fun loadCached(context: Context): Boolean {
@@ -57,6 +63,7 @@ object Catalog {
             updatedAt = p.lastModified()
             isLive = false
             photosFile(context).takeIf { it.exists() }?.let { photoRules = parsePhotos(it.readText()) }
+            hsnFile(context).takeIf { it.exists() }?.let { hsnRules = parseHsn(it.readText()) }
             true
         } catch (_: Exception) {
             false
@@ -75,6 +82,12 @@ object Catalog {
                 val photos = download(url(PHOTOS_TAB))
                 photoRules = parsePhotos(photos)
                 photosFile(context).writeText(photos)
+            } catch (_: Exception) {
+            }
+            try {
+                val hsn = download(url(HSN_TAB))
+                val rules = parseHsn(hsn)
+                if (rules.isNotEmpty()) { hsnRules = rules; hsnFile(context).writeText(hsn) }
             } catch (_: Exception) {
             }
             updatedAt = System.currentTimeMillis()
@@ -165,6 +178,26 @@ object Catalog {
         photoById = photoById.toMutableMap().apply { if (url.isBlank()) remove(id) else put(id, url) }
         photoByName = photoByName.toMutableMap().apply { if (url.isBlank()) remove(nameKey(p.name, p.brand)) else put(nameKey(p.name, p.brand), url) }
         productWisePhotos = true
+    }
+
+    private fun parseHsn(csv: String): List<HsnRule> = Csv.parse(csv).drop(1).mapNotNull { r ->
+        val cat = r.getOrNull(0)?.trim().orEmpty()
+        val code = r.getOrNull(2)?.trim().orEmpty().removeSuffix(".0")
+        if (cat.isBlank() || code.isBlank()) null else HsnRule(cat.lowercase(), r.getOrNull(1)?.trim().orEmpty().lowercase(), code)
+    }
+
+    /**
+     * HSN/SAC code from the "HSN Codes" tab: a row for this category whose word is in the
+     * product name wins (the longest word first), else the category's own row, else "".
+     */
+    fun hsnFor(category: String, name: String): String {
+        val cat = category.trim().lowercase()
+        val n = name.lowercase()
+        val rows = hsnRules.filter { it.category == cat }
+        return rows.filter { it.word.isNotBlank() && Regex("\\b" + Regex.escape(it.word)).containsMatchIn(n) }
+            .maxByOrNull { it.word.length }?.code
+            ?: rows.firstOrNull { it.word.isBlank() }?.code
+            ?: ""
     }
 
     private fun parsePhotos(csv: String): List<PhotoRule> {
