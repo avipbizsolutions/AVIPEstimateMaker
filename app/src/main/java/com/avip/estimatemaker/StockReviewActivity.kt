@@ -60,9 +60,9 @@ class StockReviewActivity : AppCompatActivity() {
                     val q = d.qty(p) ?: 0.0
                     val diff = q - last
                     addView(horizontal {
-                        addView(text(Stock.label(p), 12.5f, Ui.TEXT), lp(0, WRAP, 1f).margins(context, r = 8))
-                        addView(text("${Fmt.qty(last)} → ${Fmt.qty(q)}  ", 12.5f, Ui.TEXT))
-                        addView(text((if (diff > 0) "+" else "") + Fmt.qty(diff), 12.5f, if (diff > 0) Ui.BRAND else Ui.DANGER, bold = true))
+                        addView(text(Stock.label(p), 14.5f, Ui.TEXT), lp(0, WRAP, 1f).margins(context, r = 8))
+                        addView(text("${Fmt.qty(last)} → ${Fmt.qty(q)}  ", 14.5f, Ui.TEXT))
+                        addView(text((if (diff > 0) "+" else "") + Fmt.qty(diff), 14.5f, if (diff > 0) Ui.BRAND else Ui.DANGER, bold = true))
                     }, lp().margins(context, b = 6))
                 }
             }, lp().margins(this, b = 12))
@@ -71,9 +71,9 @@ class StockReviewActivity : AppCompatActivity() {
             list.addView(section(tr("NOT COUNTED (${todo.size})", "नहीं गिने (${todo.size})")))
             list.addView(card(12) {
                 todo.take(40).forEach { p ->
-                    addView(text(Stock.label(p), 12.5f, Ui.TEXT), lp().margins(context, b = 5))
+                    addView(text(Stock.label(p), 14.5f, Ui.TEXT), lp().margins(context, b = 5))
                 }
-                if (todo.size > 40) addView(text(tr("+${todo.size - 40} more", "+${todo.size - 40} और"), 12f, Ui.MUTED))
+                if (todo.size > 40) addView(text(tr("+${todo.size - 40} more", "+${todo.size - 40} और"), 14f, Ui.MUTED))
             }, lp().margins(this, b = 10))
             list.addView(text(tr("Items not counted keep their last count in Current Stock.", "जो आइटम नहीं गिने, उनकी पिछली गिनती Current Stock में रहेगी।"),
                 12f, Ui.TEXT) {
@@ -84,14 +84,14 @@ class StockReviewActivity : AppCompatActivity() {
         submitBtn.alpha = if (counted.isNotEmpty()) 1f else 0.5f
     }
 
-    private fun section(t: String) = text(t, 11.5f, Ui.MUTED, bold = true).apply {
+    private fun section(t: String) = text(t, 13.5f, Ui.MUTED, bold = true).apply {
         layoutParams = LinearLayout.LayoutParams(MATCH, WRAP).apply { bottomMargin = dp(6) }
     }
 
     private fun kv(k: String, v: String) = horizontal {
         setPadding(0, dp(4), 0, dp(4))
-        addView(text(k, 13f, Ui.TEXT), lp(0, WRAP, 1f))
-        addView(text(v, 13f, Ui.TEXT, bold = true) { gravity = Gravity.END })
+        addView(text(k, 15f, Ui.TEXT), lp(0, WRAP, 1f))
+        addView(text(v, 15f, Ui.TEXT, bold = true) { gravity = Gravity.END })
     }
 
     private fun submit() {

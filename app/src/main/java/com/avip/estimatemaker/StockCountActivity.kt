@@ -78,7 +78,7 @@ class StockCountActivity : AppCompatActivity() {
     }
 
     private fun chip(label: String, on: Boolean, row: LinearLayout, click: () -> Unit) {
-        row.addView(text(label, 12.5f, if (on) Color.WHITE else Ui.TEXT, bold = on) {
+        row.addView(text(label, 14.5f, if (on) Color.WHITE else Ui.TEXT, bold = on) {
             background = rounded(if (on) Ui.BRAND else Color.WHITE, dpf(18f), Ui.LINE, if (on) 0 else dp(1))
             setPadding(dp(13), dp(7), dp(13), dp(7))
             setOnClickListener { click() }
@@ -149,7 +149,7 @@ class StockCountActivity : AppCompatActivity() {
         shown.forEach { p ->
             if (category == null && p.category != lastCat) {
                 lastCat = p.category
-                list.addView(text(p.category.uppercase(), 11.5f, Ui.MUTED, bold = true), lp().margins(this, t = 6, b = 6))
+                list.addView(text(p.category.uppercase(), 13.5f, Ui.MUTED, bold = true), lp().margins(this, t = 6, b = 6))
             }
             val v = row(p)
             rows[p.id] = v
@@ -164,19 +164,19 @@ class StockCountActivity : AppCompatActivity() {
             gravity = Gravity.CENTER_VERTICAL
             addView(productPhoto(p, p.icon, 40))
             addView(vertical {
-                addView(text(p.title, 13.5f, Ui.TEXT, bold = true))
-                addView(text(listOf(p.spec, p.unit).filter { it.isNotBlank() }.joinToString(" · "), 11.5f, Ui.MUTED))
+                addView(text(p.title, 15.5f, Ui.TEXT, bold = true))
+                addView(text(listOf(p.spec, p.unit).filter { it.isNotBlank() }.joinToString(" · "), 13.5f, Ui.MUTED))
                 val info = mutableListOf<String>()
                 info += if (last != null) tr("Last count ", "पिछली गिनती ") + Fmt.qty(last) else tr("Not counted before", "पहले नहीं गिना")
                 val d = if (q != null && last != null) q - last else null
-                addView(text(info.joinToString(), 11.5f, Ui.MUTED) {
+                addView(text(info.joinToString(), 13.5f, Ui.MUTED) {
                     if (d != null) append(if (kotlin.math.abs(d) < 0.0001) "  ·  " + tr("same", "वही") else "  ·  " + (if (d > 0) "+" else "") + Fmt.qty(d))
                     if (d != null && kotlin.math.abs(d) >= 0.0001) setTextColor(if (d > 0) Ui.BRAND else Ui.DANGER)
                 })
-                if (draft.note(p).isNotBlank()) addView(text("📝 " + draft.note(p), 11.5f, Ui.MUTED))
+                if (draft.note(p).isNotBlank()) addView(text("📝 " + draft.note(p), 13.5f, Ui.MUTED))
             }, lp(0, WRAP, 1f).margins(context, l = 10, r = 6))
             addView(round("−") { step(p, -1.0) })
-            addView(text(q?.let { Fmt.qty(it) } ?: "—", 15f, if (q != null) Ui.TEXT else Ui.MUTED, bold = q != null) {
+            addView(text(q?.let { Fmt.qty(it) } ?: "—", 17f, if (q != null) Ui.TEXT else Ui.MUTED, bold = q != null) {
                 gravity = Gravity.CENTER
                 minWidth = dp(54)
                 setPadding(dp(4), dp(6), dp(4), dp(6))
@@ -187,7 +187,7 @@ class StockCountActivity : AppCompatActivity() {
         })
     }
 
-    private fun round(t: String, click: () -> Unit) = text(t, 18f, Ui.TEXT, bold = true) {
+    private fun round(t: String, click: () -> Unit) = text(t, 20f, Ui.TEXT, bold = true) {
         gravity = Gravity.CENTER
         background = rounded(0xFFEFF3F1.toInt(), dpf(16f))
         layoutParams = LinearLayout.LayoutParams(dp(32), dp(32))
@@ -207,8 +207,8 @@ class StockCountActivity : AppCompatActivity() {
             draft.qty(p)?.let { Fmt.qty(it) } ?: "")
         val note = input(tr("Note (optional), e.g. 2 cut coils", "नोट (वैकल्पिक), जैसे 2 कटे कॉइल"), InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES, draft.note(p))
         val body = vertical(18) {
-            addView(text(Stock.label(p), 13f, Ui.MUTED))
-            if (last != null) addView(text(tr("Last count: ", "पिछली गिनती: ") + Fmt.qty(last) + " " + p.unit, 12.5f, Ui.MUTED), lp().margins(context, t = 4))
+            addView(text(Stock.label(p), 15f, Ui.MUTED))
+            if (last != null) addView(text(tr("Last count: ", "पिछली गिनती: ") + Fmt.qty(last) + " " + p.unit, 14.5f, Ui.MUTED), lp().margins(context, t = 4))
             addView(qty, lp().margins(context, t = 10))
             addView(note, lp().margins(context, t = 8))
         }

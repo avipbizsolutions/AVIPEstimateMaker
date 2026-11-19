@@ -87,7 +87,7 @@ class StockCurrentActivity : AppCompatActivity() {
             Show.ZERO to tr("Zero (${items.count { (qtyOf(it) ?: 1.0) <= 0 }})", "शून्य (${items.count { (qtyOf(it) ?: 1.0) <= 0 }})"),
             Show.NEVER to tr("Never counted", "कभी नहीं गिने")).forEach { (k, label) ->
             val on = show == k
-            chips.addView(text(label, 12.5f, if (on) Color.WHITE else Ui.TEXT, bold = on) {
+            chips.addView(text(label, 14.5f, if (on) Color.WHITE else Ui.TEXT, bold = on) {
                 background = rounded(if (on) Ui.BRAND else Color.WHITE, dpf(18f), Ui.LINE, if (on) 0 else dp(1))
                 setPadding(dp(13), dp(7), dp(13), dp(7))
                 setOnClickListener { show = k; render() }
@@ -100,20 +100,21 @@ class StockCurrentActivity : AppCompatActivity() {
             words.all { hay.contains(it) } && matches(p)
         }
         list.removeAllViews()
-        if (!Stock.loaded) { list.addView(text(tr("Loading…", "लोड हो रहा है…"), 14f, Ui.MUTED) { gravity = Gravity.CENTER }, lp().margins(this, t = 40)); return }
-        if (shown.isEmpty()) { list.addView(text(tr("Nothing here", "यहां कुछ नहीं"), 14f, Ui.MUTED) { gravity = Gravity.CENTER }, lp().margins(this, t = 40)); return }
+        if (!Stock.loaded) { list.addView(text(tr("Loading…", "लोड हो रहा है…"), 16f, Ui.MUTED) { gravity = Gravity.CENTER }, lp().margins(this, t = 40)); return }
+        if (shown.isEmpty()) { list.addView(text(tr("Nothing here", "यहां कुछ नहीं"), 16f, Ui.MUTED) { gravity = Gravity.CENTER }, lp().margins(this, t = 40)); return }
         shown.groupBy { it.category }.forEach { (cat, ps) ->
             val v = ps.sumOf { Stock.value(it, qtyOf(it) ?: 0.0) }
-            list.addView(text(cat.uppercase() + if (founder && v > 0) "  ·  " + Fmt.lakh(v) else "", 11.5f, Ui.MUTED, bold = true),
+            list.addView(text(cat.uppercase() + if (founder && v > 0) "  ·  " + Fmt.lakh(v) else "", 13.5f, Ui.MUTED, bold = true),
                 lp().margins(this, t = 6, b = 6))
             list.addView(card(12) {
                 ps.sortedWith(compareBy<Product> { it.brand.lowercase() }.thenBy { it.name.lowercase() }).forEachIndexed { i, p ->
                     val q = qtyOf(p)
                     val cur = Stock.current[p.id]
+                    if (i > 0) addView(android.view.View(context).apply { setBackgroundColor(Ui.LINE) }, lp(MATCH, 1).margins(context, t = 10, b = 10))
                     addView(horizontal {
-                        if (i > 0) setPadding(0, dp(8), 0, 0)
+                        gravity = Gravity.CENTER_VERTICAL
                         addView(vertical {
-                            addView(text(Stock.label(p), 13f, Ui.TEXT, bold = true))
+                            addView(text(Stock.label(p), 15f, Ui.TEXT, bold = true))
                             val status = when {
                                 q == null -> tr("Never counted", "कभी नहीं गिना") to Ui.MUTED
                                 q <= 0 -> tr("Zero stock", "शून्य स्टॉक") to Ui.DANGER
@@ -121,14 +122,14 @@ class StockCurrentActivity : AppCompatActivity() {
                                 founder && p.unitPrice != null -> "${Fmt.inr(p.unitPrice!!)} / ${p.unit.lowercase()}" to Ui.MUTED
                                 else -> (cur?.lastCounted?.takeIf { it > 0 }?.let { tr("Counted ", "गिना ") + df.format(Date(it)) } ?: "") to Ui.MUTED
                             }
-                            if (status.first.isNotBlank()) addView(text(status.first, 11.5f, status.second))
-                            if (!cur?.note.isNullOrBlank()) addView(text("📝 " + cur!!.note, 11.5f, Ui.MUTED))
+                            if (status.first.isNotBlank()) addView(text(status.first, 13.5f, status.second))
+                            if (!cur?.note.isNullOrBlank()) addView(text("📝 " + cur!!.note, 13.5f, Ui.MUTED))
                         }, lp(0, WRAP, 1f).margins(context, r = 8))
                         addView(vertical {
                             gravity = Gravity.END
-                            addView(text((q?.let { Fmt.qty(it) } ?: "—") + " " + p.unit, 13.5f, Ui.TEXT, bold = true) { gravity = Gravity.END })
+                            addView(text((q?.let { Fmt.qty(it) } ?: "—") + " " + p.unit, 18f, Ui.TEXT, bold = true) { gravity = Gravity.END })
                             if (founder && q != null && q > 0 && p.unitPrice != null)
-                                addView(text(Fmt.lakh(Stock.value(p, q)), 11.5f, Ui.MUTED) { gravity = Gravity.END })
+                                addView(text(Fmt.lakh(Stock.value(p, q)), 13.5f, Ui.MUTED) { gravity = Gravity.END })
                         })
                     })
                 }

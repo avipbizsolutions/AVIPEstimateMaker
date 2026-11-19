@@ -57,7 +57,7 @@ class StockActivity : AppCompatActivity() {
         list.removeAllViews()
         val draft = Stock.Draft.get(this)
         startBtn.text = if (draft != null) tr("Continue counting", "गिनती जारी रखें") else tr("+ Start new count", "+ नई गिनती शुरू करें")
-        error?.let { list.addView(text(it, 12.5f, Ui.DANGER), lp().margins(this, b = 8)) }
+        error?.let { list.addView(text(it, 14.5f, Ui.DANGER), lp().margins(this, b = 8)) }
 
         // At a glance
         val items = Stock.items()
@@ -79,30 +79,30 @@ class StockActivity : AppCompatActivity() {
         if (draft != null) list.addView(card(14) {
             addView(horizontal {
                 gravity = Gravity.CENTER_VERTICAL
-                addView(text(tr("Count · ", "गिनती · ") + df.format(Date(draft.started)), 15f, Ui.TEXT, bold = true), lp(0, WRAP, 1f))
+                addView(text(tr("Count · ", "गिनती · ") + df.format(Date(draft.started)), 17f, Ui.TEXT, bold = true), lp(0, WRAP, 1f))
                 addView(tag(tr("DRAFT", "ड्राफ्ट"), 0xFFFFF4DF.toInt(), 0xFFB7791F.toInt()))
             })
-            addView(text(tr("Started ", "शुरू: ") + tf.format(Date(draft.started)) + " · " + tr("on this phone", "इस फ़ोन पर"), 11.5f, Ui.MUTED))
+            addView(text(tr("Started ", "शुरू: ") + tf.format(Date(draft.started)) + " · " + tr("on this phone", "इस फ़ोन पर"), 13.5f, Ui.MUTED))
             addView(progress(draft.counts.size, items.size), lp(MATCH, dp(7)).margins(context, t = 8, b = 4))
-            addView(text(tr("${draft.counts.size} of ${items.size} items counted", "${items.size} में से ${draft.counts.size} आइटम गिने"), 11.5f, Ui.MUTED))
+            addView(text(tr("${draft.counts.size} of ${items.size} items counted", "${items.size} में से ${draft.counts.size} आइटम गिने"), 13.5f, Ui.MUTED))
             addView(pillButton(tr("Continue counting", "गिनती जारी रखें"), Ui.BRAND, Color.WHITE, 42) { openCount() }, lp().margins(context, t = 10))
-            addView(text(tr("Discard this count", "यह गिनती हटाएं"), 12.5f, Ui.DANGER, bold = true) {
+            addView(text(tr("Discard this count", "यह गिनती हटाएं"), 14.5f, Ui.DANGER, bold = true) {
                 gravity = Gravity.CENTER; setPadding(0, dp(10), 0, 0)
                 setOnClickListener { discard() }
             })
         }, lp().margins(this, b = 10))
         else if (other != null) list.addView(card(14) {
             background = rounded(0xFFFFF8EA.toInt(), dpf(16f))
-            addView(text("🧮 " + tr("${other.by} is counting now", "${other.by} अभी गिनती कर रहे हैं"), 14f, Ui.TEXT, bold = true))
+            addView(text("🧮 " + tr("${other.by} is counting now", "${other.by} अभी गिनती कर रहे हैं"), 16f, Ui.TEXT, bold = true))
             addView(text(tr("Started ", "शुरू: ") + tf.format(Date(other.started)) + ". " +
-                tr("Wait for them to submit, so counts don't clash.", "उनके सबमिट करने तक रुकें, ताकि गिनती आपस में न टकराए।"), 12f, Ui.MUTED))
+                tr("Wait for them to submit, so counts don't clash.", "उनके सबमिट करने तक रुकें, ताकि गिनती आपस में न टकराए।"), 14f, Ui.MUTED))
         }, lp().margins(this, b = 10))
 
         list.addView(pillButton(tr("View current stock", "मौजूदा स्टॉक देखें"), Color.WHITE, Ui.BRAND, 46) {
             startActivity(Intent(this, StockCurrentActivity::class.java))
         }.apply { background = rounded(Color.WHITE, dpf(23f), Ui.BRAND, dp(1)) }, lp().margins(this, b = 14))
 
-        list.addView(text(tr("PREVIOUS COUNTS", "पिछली गिनती"), 11.5f, Ui.MUTED, bold = true), lp().margins(this, b = 6))
+        list.addView(text(tr("PREVIOUS COUNTS", "पिछली गिनती"), 13.5f, Ui.MUTED, bold = true), lp().margins(this, b = 6))
         if (Stock.history.isEmpty()) list.addView(text(
             if (Stock.loaded) tr("No counts yet. Start the first one.", "अभी कोई गिनती नहीं। पहली गिनती शुरू करें।") else tr("Loading…", "लोड हो रहा है…"),
             13f, Ui.MUTED), lp().margins(this, t = 4))
@@ -110,21 +110,21 @@ class StockActivity : AppCompatActivity() {
             list.addView(card(12) {
                 addView(horizontal {
                     gravity = Gravity.CENTER_VERTICAL
-                    addView(text(tr("Count · ", "गिनती · ") + df.format(Date(h.date)), 14.5f, Ui.TEXT, bold = true), lp(0, WRAP, 1f))
+                    addView(text(tr("Count · ", "गिनती · ") + df.format(Date(h.date)), 16.5f, Ui.TEXT, bold = true), lp(0, WRAP, 1f))
                     addView(tag(tr("SUBMITTED", "सबमिट"), 0xFFE8F3EC.toInt(), Ui.BRAND))
                 })
-                addView(text("${h.by} · " + tr("${h.items} items · ${h.changed} changed", "${h.items} आइटम · ${h.changed} बदले"), 11.5f, Ui.MUTED))
+                addView(text("${h.by} · " + tr("${h.items} items · ${h.changed} changed", "${h.items} आइटम · ${h.changed} बदले"), 13.5f, Ui.MUTED))
             }, lp().margins(this, b = 8))
         }
         list.addView(text(tr("Set minimum levels in the \"Current Stock\" tab (Min Level column) of the price sheet.",
-            "न्यूनतम स्तर प्राइस शीट के \"Current Stock\" टैब (Min Level कॉलम) में डालें।"), 11.5f, Ui.MUTED), lp().margins(this, t = 8, b = 8))
+            "न्यूनतम स्तर प्राइस शीट के \"Current Stock\" टैब (Min Level कॉलम) में डालें।"), 13.5f, Ui.MUTED), lp().margins(this, t = 8, b = 8))
     }
 
     private fun stat(n: String, label: String, color: Int) = vertical(10) {
         gravity = Gravity.CENTER_HORIZONTAL
         background = rounded(Color.WHITE, dpf(14f))
-        addView(text(n, 18f, color, bold = true) { gravity = Gravity.CENTER })
-        addView(text(label, 11f, Ui.MUTED) { gravity = Gravity.CENTER })
+        addView(text(n, 20f, color, bold = true) { gravity = Gravity.CENTER })
+        addView(text(label, 13f, Ui.MUTED) { gravity = Gravity.CENTER })
     }
 
     private fun start() {
@@ -162,7 +162,7 @@ class StockActivity : AppCompatActivity() {
     }
 }
 
-fun android.content.Context.tag(t: String, bg: Int, fg: Int) = text(t, 10.5f, fg, bold = true) {
+fun android.content.Context.tag(t: String, bg: Int, fg: Int) = text(t, 12f, fg, bold = true) {
     background = rounded(bg, dpf(8f))
     setPadding(dp(7), dp(2), dp(7), dp(2))
 }
