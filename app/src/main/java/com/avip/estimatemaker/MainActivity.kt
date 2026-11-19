@@ -299,6 +299,13 @@ class MainActivity : AppCompatActivity() {
                     if (n > 0) tr("$n active B2B customers", "$n सक्रिय B2B ग्राहक") else tr("Registered B2B customers", "रजिस्टर्ड B2B ग्राहक")) {
                     open(SaathiListActivity::class.java)
                 },
+                toolCard(R.drawable.ic_stock, 0xFF8D6E00.toInt(),
+                    tr("Stock Take", "स्टॉक गिनती"),
+                    if (Stock.Draft.get(this) != null) tr("Count in progress", "गिनती चल रही है")
+                    else tr("Count godown stock", "गोदाम का स्टॉक गिनें"),
+                    badge = if (Stock.Draft.get(this) != null) tr("Draft", "ड्राफ्ट") else null) {
+                    open(StockActivity::class.java)
+                },
                 toolCard(R.drawable.ic_tools, 0xFFEF6C00.toInt(),
                     tr("Find Installers", "इंस्टॉलर खोजें"),
                     tr("${Directory.installers.size} installers · call or WhatsApp", "${Directory.installers.size} इंस्टॉलर · कॉल या WhatsApp")) {

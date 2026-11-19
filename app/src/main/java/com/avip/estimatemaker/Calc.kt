@@ -94,6 +94,13 @@ object Fmt {
     }
 
     /** "Rupees One Lakh Twenty Three Thousand Only" */
+    /** Short rupees for totals: ₹85,400 · ₹4.6 L · ₹1.25 Cr */
+    fun lakh(v: Double): String = when {
+        v >= 1_00_00_000 -> "₹" + DecimalFormat("0.##", sym).format(v / 1_00_00_000) + " Cr"
+        v >= 1_00_000 -> "₹" + DecimalFormat("0.#", sym).format(v / 1_00_000) + " L"
+        else -> inr(kotlin.math.round(v))
+    }
+
     fun words(amount: Double): String {
         var n = round(abs(amount)).toLong()
         if (n == 0L) return "Rupees Zero Only"

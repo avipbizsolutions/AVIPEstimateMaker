@@ -64,6 +64,10 @@ function doPost(e) {
     if (d.kind === 'setPhoto') return reply(setPhoto(book, d));
     if (d.kind === 'editSaathi') return reply(editSaathi(sheet, d));
     if (d.kind === 'deleteSaathi') return reply(deleteSaathi(book, sheet, d));
+    if (d.kind === 'stockStatus') return reply(stockStatus(book, d));
+    if (d.kind === 'stockStart') return reply(stockStart(d));
+    if (d.kind === 'stockCancel') return reply(stockCancel(d));
+    if (d.kind === 'stockSubmit') return reply(stockSubmit(book, d));
 
     if (d.kind === 'saathi' || d.kind === 'vendor') {
       // Older app versions: details from a phone without login. Never touches the PIN.
@@ -285,6 +289,106 @@ function teamUser(d, allowTempPin) {
 }
 
 /** All Surya Saathis, newest first, for the team's customer list. */
+// ---------------- Stock Take (AVIP Team: Managers and Founders) ----------------
+// "Stock Counts": one row per item per count (history). "Current Stock": latest qty per product;
+// its "Min Level" column is typed by the office and kept when counts are submitted.
+const STOCK_COUNT_COLS = ['Count ID', 'Counted On', 'Counted By', 'Godown', 'Product ID', 'Category', 'Product',
+  'Unit', 'Qty', 'Last Qty', 'Difference', 'Note'];
+const STOCK_CURRENT_COLS = ['Product ID', 'Category', 'Product', 'Unit', 'Qty', 'Min Level', 'Last Counted',
+  'Counted By', 'Count ID', 'Note'];
+const GODOWN = 'Chirora, Patna';
+
+function stockSheets_(book) {
+  let counts = book.getSheetByName('Stock Counts');
+  if (!counts) { counts = book.insertSheet('Stock Counts'); counts.setFrozenRows(1); }
+  let cur = book.getSheetByName('Current Stock');
+  if (!cur) { cur = book.insertSheet('Current Stock'); cur.setFrozenRows(1); }
+  ensureHeaders(counts, STOCK_COUNT_COLS);
+  ensureHeaders(cur, STOCK_CURRENT_COLS);
+  return { counts, cur };
+}
+
+/** The count in progress (one at a time): { by, mobile, started, id } or null. Old drafts (12 h+) expire. */
+function stockDraft_() {
+  const raw = PropertiesService.getScriptProperties().getProperty('STOCK_DRAFT');
+  const dr = raw ? JSON.parse(raw) : null;
+  return dr && Date.now() - dr.started < 12 * 3600 * 1000 ? dr : null;
+}
+function setStockDraft_(dr) {
+  const p = PropertiesService.getScriptProperties();
+  if (dr) p.setProperty('STOCK_DRAFT', JSON.stringify(dr)); else p.deleteProperty('STOCK_DRAFT');
+}
+
+function stockStatus(book, d) {
+  teamUser(d);
+  const { counts, cur } = stockSheets_(book);
+  const current = data(cur).filter(r => String(r[0])).map(r => ({
+    id: String(r[0]), qty: Number(r[4]) || 0, min: r[5] === '' ? null : Number(r[5]),
+    lastCounted: r[6] instanceof Date ? r[6].getTime() : 0, by: String(r[7] || ''), note: String(r[9] || ''),
+  }));
+  // Past counts, newest first (summary per Count ID).
+  const byId = {};
+  data(counts).forEach(r => {
+    const id = String(r[0]); if (!id) return;
+    const c = byId[id] || (byId[id] = { id, date: r[1] instanceof Date ? r[1].getTime() : 0, by: String(r[2] || ''), items: 0, changed: 0 });
+    c.items++; if (Number(r[10])) c.changed++;
+  });
+  const history = Object.keys(byId).map(k => byId[k]).sort((a, b) => b.date - a.date).slice(0, 20);
+  return { ok: true, current, history, draft: stockDraft_(), godown: GODOWN };
+}
+
+function stockStart(d) {
+  const u = teamUser(d);
+  const mobile = last10(u.mobile);
+  const dr = stockDraft_();
+  if (dr && dr.mobile !== mobile && !d.force) return { ok: false, error: 'BUSY: ' + dr.by + ' is already counting (started ' +
+    Utilities.formatDate(new Date(dr.started), 'Asia/Kolkata', 'd MMM, h:mm a') + ').' };
+  const mine = dr && dr.mobile === mobile ? dr : { by: u.name, mobile, started: Date.now(),
+    id: 'SC-' + Utilities.formatDate(new Date(), 'Asia/Kolkata', 'yyMMdd-HHmm') };
+  setStockDraft_(mine);
+  return { ok: true, draft: mine };
+}
+
+function stockCancel(d) {
+  const u = teamUser(d);
+  const dr = stockDraft_();
+  if (dr && (dr.mobile === last10(u.mobile) || isFounder(u))) setStockDraft_(null);
+  return { ok: true };
+}
+
+/** items: [{ id, category, name, unit, qty, note }] — only the items counted this time. */
+function stockSubmit(book, d) {
+  const u = teamUser(d);
+  const dr = stockDraft_();
+  if (dr && dr.mobile !== last10(u.mobile)) return { ok: false, error: 'BUSY: ' + dr.by + ' is counting now. Submit after they finish.' };
+  const items = (d.items || []).filter(it => clean(it.id));
+  if (!items.length) return { ok: false, error: 'EMPTY: Nothing counted yet.' };
+  const { counts, cur } = stockSheets_(book);
+  const id = clean(d.countId) || (dr && dr.id) || ('SC-' + Utilities.formatDate(new Date(), 'Asia/Kolkata', 'yyMMdd-HHmm'));
+  // The same count sent twice (slow network): keep the first.
+  if (data(counts).some(r => String(r[0]) === id)) { setStockDraft_(null); return { ok: true, duplicate: true, countId: id }; }
+  const now = new Date();
+  const curRows = data(cur);
+  const at = {}; curRows.forEach((r, i) => { at[String(r[0])] = i; });
+  const histRows = [];
+  items.forEach(it => {
+    const pid = clean(it.id, 300), qty = Number(it.qty) || 0, note = clean(it.note, 300);
+    const i = at[pid];
+    const last = i === undefined || curRows[i][4] === '' ? '' : Number(curRows[i][4]) || 0;
+    histRows.push([id, now, u.name, GODOWN, pid, clean(it.category), clean(it.name, 300), clean(it.unit), qty,
+      last, last === '' ? '' : Math.round((qty - last) * 1000) / 1000, note]);
+    const row = [pid, clean(it.category), clean(it.name, 300), clean(it.unit), qty,
+      i === undefined ? '' : curRows[i][5], now, u.name, id, note];
+    if (i === undefined) { curRows.push(row); at[pid] = curRows.length - 1; } else curRows[i] = row;
+  });
+  counts.getRange(counts.getLastRow() + 1, 1, histRows.length, histRows[0].length).setValues(histRows);
+  cur.getRange(2, 1, curRows.length, STOCK_CURRENT_COLS.length).setValues(curRows.map(r => {
+    const x = r.slice(0, STOCK_CURRENT_COLS.length); while (x.length < STOCK_CURRENT_COLS.length) x.push(''); return x;
+  }));
+  setStockDraft_(null);
+  return { ok: true, countId: id, saved: histRows.length };
+}
+
 /** AVIP Team: every cost estimate logged for one B2B customer (by any team member or the Saathi). */
 function customerEstimates(d) {
   const mobile = last10(d.mobile);
