@@ -294,8 +294,12 @@ class MainActivity : AppCompatActivity() {
                     if (Cart.count > 0 && target != null) open(EstimateActivity::class.java)
                     else open(SaathiListActivity::class.java) { putExtra(SaathiListActivity.EXTRA_PICK, true) }
                 },
-                if (!Can.estimate(c)) null else toolCard(R.drawable.ic_history, 0xFF00897B.toInt(),
-                    tr("Cost Estimates I made", "मेरे बनाए लागत अनुमान"),
+                if (Can.editTeamEstimates(c)) toolCard(R.drawable.ic_history, 0xFF00897B.toInt(),
+                    tr("All Cost Estimates", "सभी लागत अनुमान"),
+                    tr("Whole team's estimates & tax invoices", "पूरी टीम के अनुमान व टैक्स इनवॉइस")) {
+                    open(AllEstimatesActivity::class.java)
+                } else if (!Can.estimate(c)) null else toolCard(R.drawable.ic_history, 0xFF00897B.toInt(),
+                    tr("My Cost Estimates", "मेरे लागत अनुमान"),
                     tr("Open, share or edit saved estimates", "सेव किए अनुमान खोलें, भेजें या बदलें")) {
                     open(HistoryActivity::class.java)
                 },

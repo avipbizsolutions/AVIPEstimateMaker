@@ -51,6 +51,8 @@ function doPost(e) {
     if (d.kind === 'teamMe') return reply({ ok: true, user: teamUser(d, true) });
     if (d.kind === 'saathiList') { teamUser(d); return reply({ ok: true, saathis: saathiList() }); }
     if (d.kind === 'customerEstimates') return reply({ ok: true, estimates: customerEstimates(d, teamUser(d)) });
+    if (d.kind === 'allEstimates') return reply({ ok: true, estimates: allEstimates(d) });
+    if (d.kind === 'invoiceList') return reply({ ok: true, invoices: invoiceList(d) });
 
     lock.waitLock(20000);
     const book = SpreadsheetApp.openById(SHEET_ID);
@@ -69,6 +71,9 @@ function doPost(e) {
     if (d.kind === 'stockStart') return reply(stockStart(d));
     if (d.kind === 'stockCancel') return reply(stockCancel(d));
     if (d.kind === 'stockSubmit') return reply(stockSubmit(book, d));
+    if (d.kind === 'invoiceCreate') return reply(invoiceCreate(book, d));
+    if (d.kind === 'invoicePayment') return reply(invoicePayment(book, d));
+    if (d.kind === 'invoiceCancel') return reply(invoiceCancel(book, d));
 
     if (d.kind === 'saathi' || d.kind === 'vendor') {
       // Older app versions: details from a phone without login. Never touches the PIN.
@@ -293,6 +298,8 @@ const RIGHTS = {
   deleteSaathi: ['Founder'],
   allEstimates: ['Founder', 'Sales Manager', 'Accountant', 'Dispatch'],
   editTeamEstimates: ['Founder', 'Sales Manager'],
+  invoice:      ['Founder', 'Sales Manager'],
+  cancelInvoice: ['Founder'],
   stockCount:   ['Founder', 'Sales Manager', 'Accountant', 'Dispatch'],
   stockQty:     ['Founder', 'Sales Manager', 'Accountant', 'Dispatch'],
   stockValue:   ['Founder'],
@@ -449,6 +456,162 @@ function stockSubmit(book, d) {
   }));
   setStockDraft_(null);
   return { ok: true, countId: id, saved: histRows.length };
+}
+
+// ---------------- Tax invoices (Founders and Sales Managers) ----------------
+// "Tax Invoices" tab = the invoice register. Numbers come only from here, so two phones never
+// get the same one: PREFIX/26-27/0001, a new series each financial year (April to March).
+// AVIP's turnover is above Rs 5 crore, so B2B invoices need an e-invoice IRN: the office generates
+// it on the e-invoice portal and pastes IRN, Ack No, Ack Date and the Signed QR Code into the row;
+// the app then prints them (until then the PDF says "IRN pending").
+const INVOICE_COLS = ['Invoice No', 'Invoice Date', 'Status', 'Estimate No', 'Customer', 'Contact', 'Mobile', 'GSTIN',
+  'Address', 'Place of Supply', 'Taxable Value', 'CGST', 'SGST', 'IGST', 'Round Off', 'Invoice Total',
+  'Amount Received', 'Balance', 'Payment Status', 'Vehicle No', 'Transporter', 'Made By', 'Created On',
+  'IRN', 'Ack No', 'Ack Date', 'Signed QR Code', 'Cancel Reason', 'Request ID', 'Device ID', 'Invoice Data (app)'];
+const IC = {}; INVOICE_COLS.forEach((h, i) => IC[h] = i);
+
+function invoiceSheet_(book) {
+  let sh = book.getSheetByName('Tax Invoices');
+  if (!sh) { sh = book.insertSheet('Tax Invoices'); sh.setFrozenRows(1); }
+  if (sh.getMaxColumns() < INVOICE_COLS.length) sh.insertColumnsAfter(sh.getMaxColumns(), INVOICE_COLS.length - sh.getMaxColumns());
+  ensureHeaders(sh, INVOICE_COLS);
+  return sh;
+}
+function invoiceRows_(sh) {
+  const n = sh.getLastRow() - 1;
+  return n > 0 ? sh.getRange(2, 1, n, INVOICE_COLS.length).getValues() : [];
+}
+function fyOf_(date) {
+  const y = Number(Utilities.formatDate(date, 'Asia/Kolkata', 'yyyy')), m = Number(Utilities.formatDate(date, 'Asia/Kolkata', 'M'));
+  const start = m >= 4 ? y : y - 1;
+  return String(start % 100).padStart(2, '0') + '-' + String((start + 1) % 100).padStart(2, '0');
+}
+function money_(v) { return Math.round((Number(v) || 0) * 100) / 100; }
+function payStatus_(total, received) { return received <= 0 ? 'Unpaid' : received + 0.5 >= total ? 'Paid' : 'Partly Paid'; }
+
+function invoiceOut_(r) {
+  const t = v => v instanceof Date ? v.getTime() : 0;
+  return {
+    number: String(r[IC['Invoice No']]), date: t(r[IC['Invoice Date']]), status: String(r[IC['Status']] || 'Issued'),
+    estimateNo: String(r[IC['Estimate No']] || ''), company: String(r[IC['Customer']] || ''), mobile: String(r[IC['Mobile']] || ''),
+    gst: String(r[IC['GSTIN']] || ''), total: Number(r[IC['Invoice Total']]) || 0,
+    received: Number(r[IC['Amount Received']]) || 0, balance: Number(r[IC['Balance']]) || 0,
+    payment: String(r[IC['Payment Status']] || ''), vehicle: String(r[IC['Vehicle No']] || ''),
+    transporter: String(r[IC['Transporter']] || ''), madeBy: String(r[IC['Made By']] || ''),
+    irn: String(r[IC['IRN']] || ''), ackNo: String(r[IC['Ack No']] || ''),
+    ackDate: r[IC['Ack Date']] instanceof Date ? Utilities.formatDate(r[IC['Ack Date']], 'Asia/Kolkata', 'dd-MM-yyyy HH:mm') : String(r[IC['Ack Date']] || ''),
+    qr: String(r[IC['Signed QR Code']] || ''), cancelReason: String(r[IC['Cancel Reason']] || ''),
+    doc: String(r[IC['Invoice Data (app)']] || ''),
+  };
+}
+
+/** Issues the next invoice number for a cost estimate. The phone sends a requestId so a retry never issues two. */
+function invoiceCreate(book, d) {
+  const u = teamUser(d);
+  need(u, 'invoice');
+  const sh = invoiceSheet_(book);
+  const rows = invoiceRows_(sh);
+  const req = clean(d.requestId);
+  const again = req && rows.find(r => String(r[IC['Request ID']]) === req);
+  if (again) return Object.assign({ ok: true, duplicate: true }, invoiceOut_(again));
+  if (!/^[6-9]\d{9}$/.test(last10(d.mobile))) return { ok: false, error: 'The customer has no valid mobile number.' };
+  if (clean(d.company).length < 2) return { ok: false, error: 'Customer name is missing.' };
+  const now = new Date();
+  const fy = fyOf_(now);
+  const prefix = clean(setting_(book, 'invoice_prefix')) || 'BSC';
+  const head = prefix + '/' + fy + '/';
+  let max = 0;
+  rows.forEach(r => { const no = String(r[0]); if (no.indexOf(head) === 0) max = Math.max(max, Number(no.slice(head.length)) || 0); });
+  const number = head + String(max + 1).padStart(4, '0');
+  const total = money_(d.total), received = Math.min(money_(d.received), total);
+  const row = new Array(INVOICE_COLS.length).fill('');
+  row[IC['Invoice No']] = number; row[IC['Invoice Date']] = now; row[IC['Status']] = 'Issued';
+  row[IC['Estimate No']] = clean(d.estimateNo); row[IC['Customer']] = clean(d.company); row[IC['Contact']] = clean(d.contact);
+  row[IC['Mobile']] = last10(d.mobile); row[IC['GSTIN']] = clean(d.gst).toUpperCase(); row[IC['Address']] = clean(d.address, 300);
+  row[IC['Place of Supply']] = clean(d.placeOfSupply); row[IC['Taxable Value']] = money_(d.taxable);
+  row[IC['CGST']] = money_(d.cgst); row[IC['SGST']] = money_(d.sgst); row[IC['IGST']] = money_(d.igst);
+  row[IC['Round Off']] = money_(d.roundOff); row[IC['Invoice Total']] = total;
+  row[IC['Amount Received']] = received; row[IC['Balance']] = money_(total - received);
+  row[IC['Payment Status']] = payStatus_(total, received);
+  row[IC['Vehicle No']] = clean(d.vehicle).toUpperCase(); row[IC['Transporter']] = clean(d.transporter);
+  row[IC['Made By']] = u.name + ' (AVIP ' + u.circle + ')'; row[IC['Created On']] = now;
+  row[IC['Request ID']] = req; row[IC['Device ID']] = clean(d.installId);
+  row[IC['Invoice Data (app)']] = String(d.doc || '').slice(0, 45000);
+  sh.getRange(sh.getLastRow() + 1, 1, 1, row.length).setValues([row]);
+  return Object.assign({ ok: true }, invoiceOut_(row));
+}
+
+function findInvoice_(sh, number) {
+  const rows = invoiceRows_(sh);
+  const i = rows.findIndex(r => String(r[0]) === clean(number));
+  return { rows, i };
+}
+
+/** Payment received so far on an invoice (total, not an addition). */
+function invoicePayment(book, d) {
+  const u = teamUser(d);
+  need(u, 'invoice');
+  const sh = invoiceSheet_(book);
+  const { rows, i } = findInvoice_(sh, d.number);
+  if (i < 0) return { ok: false, error: 'Invoice not found.' };
+  const r = rows[i];
+  if (String(r[IC['Status']]) === 'Cancelled') return { ok: false, error: 'This invoice is cancelled.' };
+  const total = Number(r[IC['Invoice Total']]) || 0;
+  const received = Math.max(0, Math.min(money_(d.received), total));
+  sh.getRange(i + 2, IC['Amount Received'] + 1, 1, 3).setValues([[received, money_(total - received), payStatus_(total, received)]]);
+  r[IC['Amount Received']] = received; r[IC['Balance']] = money_(total - received); r[IC['Payment Status']] = payStatus_(total, received);
+  return Object.assign({ ok: true }, invoiceOut_(r));
+}
+
+/** Founders: cancel an invoice. It stays in the register (number not reused). */
+function invoiceCancel(book, d) {
+  const u = teamUser(d);
+  need(u, 'cancelInvoice');
+  const reason = clean(d.reason, 200);
+  if (reason.length < 3) return { ok: false, error: 'Please give a reason for cancelling.' };
+  const sh = invoiceSheet_(book);
+  const { rows, i } = findInvoice_(sh, d.number);
+  if (i < 0) return { ok: false, error: 'Invoice not found.' };
+  sh.getRange(i + 2, IC['Status'] + 1).setValue('Cancelled');
+  sh.getRange(i + 2, IC['Cancel Reason'] + 1).setValue(reason + ' — ' + u.name + ', ' +
+    Utilities.formatDate(new Date(), 'Asia/Kolkata', 'dd MMM yyyy HH:mm'));
+  rows[i][IC['Status']] = 'Cancelled';
+  return Object.assign({ ok: true }, invoiceOut_(rows[i]));
+}
+
+/** Founders / Sales Managers: invoices, newest first (one customer when mobile is given). */
+function invoiceList(d) {
+  const u = teamUser(d);
+  need(u, 'invoice');
+  const sh = invoiceSheet_(SpreadsheetApp.openById(SHEET_ID));
+  const mobile = last10(d.mobile);
+  return invoiceRows_(sh).filter(r => String(r[0]) && (!mobile || last10(r[IC['Mobile']]) === mobile))
+    .map(invoiceOut_).sort((a, b) => b.date - a.date).slice(0, 500);
+}
+
+/** Founders / Sales Managers: every cost estimate in the log, newest first. */
+function allEstimates(d) {
+  const u = teamUser(d);
+  need(u, 'editTeamEstimates');
+  const log = SpreadsheetApp.openById(SHEET_ID).getSheetByName('Quotations Log');
+  if (!log || log.getLastRow() < 2) return [];
+  return log.getRange(2, 1, log.getLastRow() - 1, 14).getValues()
+    .filter(r => String(r[1] || ''))
+    .map(r => ({
+      createdAt: r[0] instanceof Date ? r[0].getTime() : 0,
+      number: String(r[1] || ''), company: String(r[2] || ''), contact: String(r[3] || ''), mobile: String(r[4] || ''),
+      gst: String(r[5] || ''), items: String(r[6] || ''), grandTotal: Number(r[9]) || 0, madeBy: String(r[10] || ''),
+      mine: !!clean(d.installId) && String(r[12] || '') === clean(d.installId), device: String(r[12] || ''),
+      doc: String(r[13] || ''),
+    }))
+    .sort((a, b) => b.createdAt - a.createdAt).slice(0, 400);
+}
+
+function setting_(book, key) {
+  const sh = book.getSheetByName('App Settings');
+  if (!sh) return '';
+  const r = sh.getRange(1, 1, sh.getLastRow(), 2).getValues().find(x => String(x[0]).trim() === key);
+  return r ? String(r[1]) : '';
 }
 
 /** AVIP Team: every cost estimate logged for one B2B customer (by any team member or the Saathi). */

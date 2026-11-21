@@ -46,11 +46,14 @@ class PdfMaker(private val context: Context) {
     private var y = 0f
     private var pageNo = 0
     private lateinit var footerText: String
+    private var cancelled = false
 
     fun make(est: EstimateDoc, out: File) {
         val s = Catalog.settings
         val totals = Calc.compute(est.lines)
-        val date = SimpleDateFormat("dd MMM yyyy", Locale.ENGLISH).format(Date(est.createdAt))
+        val inv = est.invoice
+        cancelled = inv?.cancelled == true
+        val date = SimpleDateFormat("dd MMM yyyy", Locale.ENGLISH).format(Date(inv?.date?.takeIf { it > 0 } ?: est.createdAt))
         footerText = "${s["company_name"].ifBlank { "AVIP Business Solutions LLP" }}  ·  ${s["phone"]}  ·  ${s["website"]}"
 
         doc = PdfDocument()
@@ -76,15 +79,19 @@ class PdfMaker(private val context: Context) {
         if (s["gstin"].isNotBlank()) hy = drawWrapped("GSTIN: ${s["gstin"]}", textLeft, hy, headWidth, paint(8.5f, ink, true), 11f)
 
         // Title block on the right
-        val title = "COST ESTIMATE"
+        val title = if (inv != null) "TAX INVOICE" else "COST ESTIMATE"
         val tb = RectF(right - titleW, headTop, right, headTop + 62f)
         canvas.drawRoundRect(tb, 8f, 8f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = brand })
         canvas.drawText(title, tb.centerX(), tb.top + 21f, paint(15f, Color.WHITE, true, Paint.Align.CENTER))
-        canvas.drawText("No: ${est.number}", tb.centerX(), tb.top + 37f, paint(8.5f, Color.WHITE, align = Paint.Align.CENTER))
+        canvas.drawText("No: ${inv?.number ?: est.number}", tb.centerX(), tb.top + 37f, paint(8.5f, Color.WHITE, align = Paint.Align.CENTER))
         canvas.drawText("Date: $date", tb.centerX(), tb.top + 50f, paint(8.5f, Color.WHITE, align = Paint.Align.CENTER))
-        val days = s.num("quote_validity_days", 7.0).toInt()
-        val till = SimpleDateFormat("dd MMM yyyy", Locale.ENGLISH).format(Date(est.createdAt + days * 86_400_000L))
-        canvas.drawText("Valid till: $till", tb.centerX(), tb.bottom + 12f, paint(8f, muted, align = Paint.Align.CENTER))
+        if (inv != null) {
+            canvas.drawText("Original for Recipient", tb.centerX(), tb.bottom + 12f, paint(8f, muted, align = Paint.Align.CENTER))
+        } else {
+            val days = s.num("quote_validity_days", 7.0).toInt()
+            val till = SimpleDateFormat("dd MMM yyyy", Locale.ENGLISH).format(Date(est.createdAt + days * 86_400_000L))
+            canvas.drawText("Valid till: $till", tb.centerX(), tb.bottom + 12f, paint(8f, muted, align = Paint.Align.CENTER))
+        }
 
         y = maxOf(hy, headTop + 76f) + 6f
         canvas.drawRect(margin, y, right, y + 3f, Paint().apply { color = sun })
@@ -92,14 +99,14 @@ class PdfMaker(private val context: Context) {
 
         // ---------- To / For ----------
         val buyer = est.buyer ?: Buyer.ofSaathi(context)
-        val toTitle = if (est.madeBy.isNotBlank()) "Cost estimate for  ·  B2B customer" else "Cost estimate for  ·  Surya Saathi"
+        val toTitle = if (inv != null) "Bill to" else if (est.madeBy.isNotBlank()) "Cost estimate for  ·  B2B customer" else "Cost estimate for  ·  Surya Saathi"
         val toLines = mutableListOf<String>()
         toLines += buyer.company
         toLines += listOf(buyer.contact, if (buyer.mobile.isNotBlank()) "Mob: " + buyer.mobile else "").filter { it.isNotBlank() }.joinToString("  ·  ")
         val place = listOf(buyer.address, buyer.city).filter { it.isNotBlank() }.joinToString(", ")
         if (place.isNotBlank()) toLines += place
         if (buyer.gst.isNotBlank()) toLines += "GSTIN: ${buyer.gst}" + (buyer.gst.take(2).takeIf { it.all(Char::isDigit) && it.length == 2 }?.let { "  ·  State: " + stateName(it) } ?: "")
-        if (est.madeBy.isNotBlank()) toLines += "Prepared by: ${est.madeBy}, AVIP Business Solutions LLP"
+        if (est.madeBy.isNotBlank() && inv == null) toLines += "Prepared by: ${est.madeBy}, AVIP Business Solutions LLP"
         val boxTop = y
         val half = (right - margin - 12f) / 2f
         var ly = boxTop + 14f
@@ -114,8 +121,14 @@ class PdfMaker(private val context: Context) {
         val interState = buyerState != sellerState
         var ry = boxTop + 14f
         val rx = margin + half + 22f
-        canvas.drawText("ESTIMATE DETAILS", rx, ry, paint(7.5f, muted, true)); ry += 14f
+        canvas.drawText(if (inv != null) "INVOICE DETAILS" else "ESTIMATE DETAILS", rx, ry, paint(7.5f, muted, true)); ry += 14f
         canvas.drawText("Place of supply: ${stateName(buyerState)}", rx, ry, paint(8.5f, ink)); ry += 11f
+        if (inv != null) {
+            canvas.drawText("Reverse charge: No", rx, ry, paint(8.5f, ink)); ry += 11f
+            if (inv.estimateNo.isNotBlank()) { canvas.drawText("Against estimate: ${inv.estimateNo}", rx, ry, paint(8.5f, ink)); ry += 11f }
+            if (inv.vehicle.isNotBlank()) { canvas.drawText("Vehicle no: ${inv.vehicle}", rx, ry, paint(8.5f, ink)); ry += 11f }
+            if (inv.transporter.isNotBlank()) ry = drawWrapped("Transporter: ${inv.transporter}", rx, ry, half - 20f, paint(8.5f, ink), 11f)
+        }
         canvas.drawText("Items: ${est.lines.size}", rx, ry, paint(8.5f, ink)); ry += 11f
         if (totals.kwp > 0) {
             val panels = est.lines.filter { it.wp > 0 }.sumOf { it.qty }
@@ -126,6 +139,27 @@ class PdfMaker(private val context: Context) {
         canvas.drawRoundRect(RectF(margin, boxTop, margin + half, boxBottom), 6f, 6f, boxPaint)
         canvas.drawRoundRect(RectF(margin + half + 12f, boxTop, right, boxBottom), 6f, 6f, boxPaint)
         y = boxBottom + 14f
+
+        // ---------- e-Invoice (IRN) ----------
+        if (inv != null) {
+            if (inv.irn.isNotBlank()) {
+                val qrSize = 86f
+                val top = y
+                canvas.drawText("e-INVOICE", margin, top + 10f, paint(7.8f, brand, true))
+                var iy = top + 24f
+                iy = drawWrapped("IRN: ${inv.irn}", margin, iy, right - margin - qrSize - 16f, paint(8f, ink), 10.5f)
+                if (inv.ackNo.isNotBlank()) iy = drawWrapped("Ack No: ${inv.ackNo}" + (if (inv.ackDate.isNotBlank()) "   ·   Ack Date: ${inv.ackDate}" else ""),
+                    margin, iy, right - margin - qrSize - 16f, paint(8f, ink), 10.5f)
+                if (inv.qr.isNotBlank()) drawQr(inv.qr, right - qrSize, top, qrSize)
+                y = maxOf(iy, if (inv.qr.isNotBlank()) top + qrSize else iy) + 10f
+            } else if (buyer.gst.isNotBlank()) {
+                val box = RectF(margin, y, right, y + 30f)
+                canvas.drawRoundRect(box, 6f, 6f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFFFF4DF.toInt() })
+                canvas.drawText("e-Invoice IRN pending: this copy is not valid for GST input tax credit until the IRN and QR code are added.",
+                    margin + 8f, y + 18.5f, paint(8f, 0xFF8A5A00.toInt(), true))
+                y = box.bottom + 12f
+            }
+        }
 
         // ---------- Items table ----------
         val cols = listOf(
@@ -221,7 +255,10 @@ class PdfMaker(private val context: Context) {
             }
         }
         if (totals.roundOff != 0.0) totalRows += "Round off" to Fmt.inr(totals.roundOff, true)
-        val needed = 30f + totalRows.size * 15f + 26f + 20f
+        val payRows = if (inv != null && inv.received > 0) listOf(
+            "Received" to Fmt.inr(inv.received, true),
+            "Balance" to Fmt.inr(round2(totals.grandTotal - inv.received), true)) else emptyList()
+        val needed = 30f + (totalRows.size + payRows.size) * 15f + 26f + 20f
         if (y + needed > pageH - 70f) newPage()
         y += 10f
         val tx1 = right - 230f
@@ -236,8 +273,13 @@ class PdfMaker(private val context: Context) {
         canvas.drawText("Total", tx1, gt.top + 16f, paint(10f, Color.WHITE, true))
         canvas.drawText(Fmt.inr(totals.grandTotal, true), right - 6f, gt.top + 16.5f, paint(12f, Color.WHITE, true, Paint.Align.RIGHT))
         y = gt.bottom + 4f
+        payRows.forEach { (label, value) ->
+            canvas.drawText(label, tx1, y + 12f, paint(9f, muted, label == "Balance"))
+            canvas.drawText(value, right - 6f, y + 12f, paint(9f, ink, label == "Balance", Paint.Align.RIGHT))
+            y += 15f
+        }
         // amount in words on the left side
-        canvas.drawText("ESTIMATE AMOUNT IN WORDS", margin, sumTop + 10f, paint(7.8f, brand, true))
+        canvas.drawText(if (inv != null) "INVOICE AMOUNT IN WORDS" else "ESTIMATE AMOUNT IN WORDS", margin, sumTop + 10f, paint(7.8f, brand, true))
         drawWrapped(Fmt.words(totals.grandTotal), margin, sumTop + 24f, tx1 - margin - 20f, paint(8.5f, ink), 11f)
         y += 6f
 
@@ -249,10 +291,11 @@ class PdfMaker(private val context: Context) {
             "Bank: ${s["bank_branch"]}",
         )
         section("Bank details", bank)
-        if (s["address"].isNotBlank()) section("Pickup / Godown", listOfNotNull(s["address"], s["map_link"].takeIf { it.isNotBlank() }))
+        if (inv == null && s["address"].isNotBlank()) section("Pickup / Godown", listOfNotNull(s["address"], s["map_link"].takeIf { it.isNotBlank() }))
         val terms = s.terms()
         if (terms.isNotEmpty()) section("Terms & conditions", terms.mapIndexed { i, t -> "${i + 1}. $t" })
-        if (s["price_note"].isNotBlank()) section("Note", listOf(s["price_note"] + (if (s["price_last_updated"].isNotBlank()) " Price list dated ${s["price_last_updated"]}." else "")))
+        if (inv != null && inv.cancelled) section("Cancelled", listOf(inv.cancelReason.ifBlank { "This invoice has been cancelled." }))
+        if (inv == null && s["price_note"].isNotBlank()) section("Note", listOf(s["price_note"] + (if (s["price_last_updated"].isNotBlank()) " Price list dated ${s["price_last_updated"]}." else "")))
 
         // signature
         if (y + 50f > pageH - 60f) newPage()
@@ -276,6 +319,19 @@ class PdfMaker(private val context: Context) {
         "27" to "Maharashtra", "29" to "Karnataka", "30" to "Goa", "32" to "Kerala", "33" to "Tamil Nadu",
         "34" to "Puducherry", "35" to "Andaman & Nicobar", "36" to "Telangana", "37" to "Andhra Pradesh", "38" to "Ladakh",
     )[code] ?: "")
+
+    /** e-Invoice QR code (the Signed QR Code from the portal), drawn as vector squares. */
+    private fun drawQr(text: String, x: Float, top: Float, size: Float) {
+        val m = runCatching {
+            com.google.zxing.qrcode.QRCodeWriter().encode(text, com.google.zxing.BarcodeFormat.QR_CODE, 0, 0,
+                mapOf(com.google.zxing.EncodeHintType.MARGIN to 0, com.google.zxing.EncodeHintType.ERROR_CORRECTION to
+                    com.google.zxing.qrcode.decoder.ErrorCorrectionLevel.L))
+        }.getOrNull() ?: return
+        val cell = size / m.width
+        val p = Paint().apply { color = Color.BLACK }
+        for (i in 0 until m.width) for (j in 0 until m.height) if (m.get(i, j))
+            canvas.drawRect(x + i * cell, top + j * cell, x + (i + 1) * cell, top + (j + 1) * cell, p)
+    }
 
     private data class Col(val title: String, val w: Float, val align: Paint.Align)
 
@@ -302,6 +358,12 @@ class PdfMaker(private val context: Context) {
     private fun finishPage() {
         val p = page ?: return
         val c = p.canvas
+        if (cancelled) {
+            c.save()
+            c.rotate(-35f, pageW / 2f, pageH / 2f)
+            c.drawText("CANCELLED", pageW / 2f, pageH / 2f, paint(90f, 0x33C0392B, true, Paint.Align.CENTER))
+            c.restore()
+        }
         c.drawLine(margin, pageH - 34f, right, pageH - 34f, Paint().apply { color = rule; strokeWidth = 0.6f })
         c.drawText(footerText, margin, pageH - 22f, paint(7.5f, muted))
         c.drawText("Page $pageNo", right, pageH - 22f, paint(7.5f, muted, align = Paint.Align.RIGHT))

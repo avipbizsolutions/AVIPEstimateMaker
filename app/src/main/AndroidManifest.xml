@@ -47,6 +47,7 @@
         <activity android:name=".HistoryActivity" android:exported="false" />
         <activity android:name=".CustomerEstimatesActivity" android:exported="false" />
         <activity android:name=".StockActivity" android:exported="false" />
+        <activity android:name=".AllEstimatesActivity" android:exported="false" />
         <activity android:name=".StockCountActivity" android:exported="false" />
         <activity android:name=".StockReviewActivity" android:exported="false" />
         <activity android:name=".StockCurrentActivity" android:exported="false" />

@@ -118,6 +118,7 @@ class CustomerEstimatesActivity : AppCompatActivity() {
             return
         }
         val opts = mutableListOf(tr("Open PDF", "PDF खोलें"), tr("Send to customer on WhatsApp", "ग्राहक को WhatsApp पर भेजें"))
+        if (Can.invoice(this)) opts += tr("Convert to Tax Invoice", "टैक्स इनवॉइस बनाएं")
         if (Can.estimate(this)) {
             if (e.mine || Can.editTeamEstimates(this)) opts += tr("Edit this cost estimate", "यह लागत अनुमान बदलें")
             opts += tr("Edit as new cost estimate", "नए अनुमान के रूप में बदलें")
@@ -129,6 +130,7 @@ class CustomerEstimatesActivity : AppCompatActivity() {
                     EstimateStore.whatsapp(this, it, buyer.mobile,
                         "Namaste ${buyer.contact.substringBefore(' ')} ji, sharing AVIP cost estimate ${doc.number} for ${buyer.company}. — ${Session.teamName(this)}, AVIP Business Solutions LLP")
                 }
+                tr("Convert to Tax Invoice", "टैक्स इनवॉइस बनाएं") -> Invoices.convert(this, doc, buyer) {}
                 else -> edit(doc, existing = opts[which] == tr("Edit this cost estimate", "यह लागत अनुमान बदलें"), device = if (e.mine) "" else e.device)
             }
         }.show()

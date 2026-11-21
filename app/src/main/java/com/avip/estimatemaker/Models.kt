@@ -140,9 +140,12 @@ data class EstimateDoc(
     val buyer: Buyer? = null,
     /** AVIP team member who prepared it; blank when the Saathi made it. */
     val madeBy: String = "",
+    /** Set when this is a GST tax invoice (made from a cost estimate). */
+    val invoice: InvoiceInfo? = null,
 ) {
     fun toJson(): JSONObject = JSONObject()
         .put("buyer", buyer?.toJson() ?: JSONObject.NULL).put("madeBy", madeBy)
+        .put("invoice", invoice?.toJson() ?: JSONObject.NULL)
         .put("number", number).put("createdAt", createdAt).put("grandTotal", grandTotal)
         .put("lines", JSONArray().apply { lines.forEach { put(it.toJson()) } })
 
@@ -156,7 +159,38 @@ data class EstimateDoc(
                 grandTotal = o.optDouble("grandTotal", 0.0),
                 buyer = if (o.isNull("buyer")) null else Buyer.fromJson(o.optJSONObject("buyer")),
                 madeBy = o.optString("madeBy"),
+                invoice = if (o.isNull("invoice")) null else InvoiceInfo.fromJson(o.optJSONObject("invoice")),
             )
+        }
+    }
+}
+
+/** Tax invoice details. Number and date come from the office register; IRN fields are pasted there by the office. */
+data class InvoiceInfo(
+    val number: String,
+    val date: Long,
+    val estimateNo: String = "",
+    val vehicle: String = "",
+    val transporter: String = "",
+    val received: Double = 0.0,
+    val irn: String = "",
+    val ackNo: String = "",
+    val ackDate: String = "",
+    val qr: String = "",
+    val status: String = "Issued",
+    val cancelReason: String = "",
+) {
+    val cancelled get() = status.equals("Cancelled", true)
+
+    fun toJson(): JSONObject = JSONObject().put("number", number).put("date", date).put("estimateNo", estimateNo)
+        .put("vehicle", vehicle).put("transporter", transporter).put("received", received)
+        .put("irn", irn).put("ackNo", ackNo).put("ackDate", ackDate).put("qr", qr).put("status", status).put("cancelReason", cancelReason)
+
+    companion object {
+        fun fromJson(o: JSONObject?): InvoiceInfo? = o?.let {
+            InvoiceInfo(it.optString("number"), it.optLong("date"), it.optString("estimateNo"), it.optString("vehicle"),
+                it.optString("transporter"), it.optDouble("received", 0.0), it.optString("irn"), it.optString("ackNo"),
+                it.optString("ackDate"), it.optString("qr"), it.optString("status", "Issued"), it.optString("cancelReason"))
         }
     }
 }
