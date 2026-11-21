@@ -10,7 +10,7 @@ import org.json.JSONObject
  * with the Min Level the office types in). The count in progress is kept on this phone until submitted.
  */
 object Stock {
-    class Current(val id: String, val qty: Double, val min: Double?, val lastCounted: Long, val by: String, val note: String)
+    class Current(val id: String, val qty: Double, val min: Double?, val lastCounted: Long, val by: String, val note: String, val low: Boolean = false)
     class Past(val id: String, val date: Long, val by: String, val items: Int, val changed: Int)
     class ServerDraft(val id: String, val by: String, val mobile: String, val started: Long)
 
@@ -29,6 +29,7 @@ object Stock {
     fun value(p: Product, qty: Double) = (p.unitPrice ?: 0.0) * qty
 
     fun isLow(p: Product, qty: Double?): Boolean {
+        if (current[p.id]?.low == true) return true
         val min = current[p.id]?.min ?: return false
         return qty != null && qty > 0 && qty < min
     }
@@ -51,7 +52,7 @@ object Stock {
         current = (0 until cur.length()).mapNotNull { cur.optJSONObject(it) }.associate {
             it.optString("id") to Current(it.optString("id"), it.optDouble("qty", 0.0),
                 if (it.isNull("min") || !it.has("min")) null else it.optDouble("min").takeIf { m -> !m.isNaN() },
-                it.optLong("lastCounted"), it.optString("by"), it.optString("note"))
+                it.optLong("lastCounted"), it.optString("by"), it.optString("note"), it.optBoolean("low"))
         }
         val h = o.optJSONArray("history") ?: JSONArray()
         history = (0 until h.length()).mapNotNull { h.optJSONObject(it) }.map {

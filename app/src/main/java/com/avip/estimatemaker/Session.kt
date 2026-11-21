@@ -30,8 +30,24 @@ object Session {
     fun teamName(c: Context) = p(c).getString("team_name", "") ?: ""
     fun teamMobile(c: Context) = p(c).getString("team_mobile", "") ?: ""
     fun teamDesignation(c: Context) = p(c).getString("team_designation", "") ?: ""
-    fun founder(c: Context) = p(c).getBoolean("founder", false)
-    fun teamRoleLabel(c: Context) = if (founder(c)) tr("Founder", "फ़ाउंडर") else tr("Manager", "मैनेजर")
+    fun founder(c: Context) = role(c) == Role.FOUNDER
+
+    /** Bihar Solar Circle role (Team Directory → "Solar Circle Role"). */
+    enum class Role(val sheet: String, val en: String, val hi: String) {
+        FOUNDER("Founder", "Founder", "फ़ाउंडर"),
+        SALES_MANAGER("Sales Manager", "Sales Manager", "सेल्स मैनेजर"),
+        SALES_EXEC("Sales Executive", "Sales Executive", "सेल्स एग्ज़ीक्यूटिव"),
+        ACCOUNTANT("Accountant", "Accountant", "अकाउंटेंट"),
+        DISPATCH("Dispatch", "Dispatch", "डिस्पैच");
+        companion object { fun of(s: String?) = values().firstOrNull { it.sheet.equals(s?.trim(), true) } }
+    }
+
+    fun role(c: Context): Role? = if (!isTeam(c)) null else Role.of(p(c).getString("team_role", null))
+        ?: if (p(c).getBoolean("founder", false)) Role.FOUNDER else Role.SALES_MANAGER
+
+    fun setRole(c: Context, role: String?) { Role.of(role)?.let { p(c).edit().putString("team_role", it.sheet).apply() } }
+
+    fun teamRoleLabel(c: Context) = role(c)?.let { tr(it.en, it.hi) } ?: ""
 
     /** The name to use in messages: the Saathi's contact person, or the team member. */
     fun myName(c: Context) = if (isTeam(c)) teamName(c) else Vendor.contact(c)
@@ -44,13 +60,14 @@ object Session {
         p(c).edit().putString("kind", Kind.SAATHI.name).putString("token", token).putBoolean("must_set_pin", mustSet).apply()
     }
 
-    fun saveTeam(c: Context, token: String, user: JSONObject, mustSet: Boolean, founder: Boolean) {
+    fun saveTeam(c: Context, token: String, user: JSONObject, mustSet: Boolean, founder: Boolean, role: String = "") {
         switchOwner(c, "T:" + user.optString("mobile").filter { it.isDigit() }.takeLast(10))
         p(c).edit().putString("kind", Kind.TEAM.name).putString("token", token).putBoolean("must_set_pin", mustSet)
             .putString("team_name", user.optString("name").trim())
             .putString("team_mobile", user.optString("mobile").filter { it.isDigit() }.takeLast(10))
             .putString("team_designation", user.optString("designation").trim())
-            .putBoolean("founder", founder).apply()
+            .putBoolean("founder", founder)
+            .putString("team_role", Role.of(role.ifBlank { user.optString("circle") })?.sheet).apply()
     }
 
     fun pinChanged(c: Context, token: String) {
@@ -87,6 +104,32 @@ object Session {
         c.applicationContext.getSharedPreferences("vendor", Context.MODE_PRIVATE).edit()
             .clear().putString("install_id", keepId).apply()
     }
+}
+
+/**
+ * What this login may do. A Surya Saathi can do everything meant for Saathis; AVIP Team
+ * rights follow the role (the office script checks the same rules).
+ */
+object Can {
+    private fun r(c: Context) = Session.role(c)
+    private fun team(c: Context, vararg ok: Session.Role) = r(c).let { it == null || it in ok }
+    private val F = Session.Role.FOUNDER; private val SM = Session.Role.SALES_MANAGER; private val SE = Session.Role.SALES_EXEC
+    private val AC = Session.Role.ACCOUNTANT; private val DI = Session.Role.DISPATCH
+
+    fun estimate(c: Context) = team(c, F, SM, SE)
+    fun specialRates(c: Context) = Session.isTeam(c) && team(c, F, SM)
+    fun seeRates(c: Context) = team(c, F, SM, SE, AC)
+    fun addSaathi(c: Context) = Session.isTeam(c) && team(c, F, SM, SE)
+    fun editSaathi(c: Context) = Session.isTeam(c) && team(c, F, SM)
+    fun editGst(c: Context) = Session.isTeam(c) && team(c, F, SM, AC)
+    fun deleteSaathi(c: Context) = Session.isTeam(c) && team(c, F)
+    fun allEstimates(c: Context) = Session.isTeam(c) && team(c, F, SM, AC, DI)
+    fun stockCount(c: Context) = Session.isTeam(c) && team(c, F, SM, AC, DI)
+    fun stockQty(c: Context) = Session.isTeam(c) && team(c, F, SM, AC, DI)
+    fun stockValue(c: Context) = Session.isTeam(c) && team(c, F)
+    fun photo(c: Context) = Session.isTeam(c) && team(c, F, SM, DI)
+    fun installers(c: Context) = team(c, F, SM, SE)
+    fun transporters(c: Context) = team(c, F, SM, SE, DI)
 }
 
 /** A readable error from the office; [code] is e.g. "ALREADY", "BADPIN", "SESSION", "BLOCKED", "NET". */
@@ -138,7 +181,8 @@ object Api {
         "LOCKED" -> "बहुत बार गलत PIN। 15 मिनट बाद कोशिश करें या AVIP से PIN रीसेट करवाएं।"
         "BLOCKED" -> "आपका अकाउंट रोका गया है। कृपया AVIP से संपर्क करें।"
         "SESSION" -> "कृपया फिर से लॉगिन करें।"
-        "NOTEAM" -> "Bihar Solar Circle केवल AVIP Managers और Founders के लिए है।"
+        "NOTEAM" -> "आपको Bihar Solar Circle का एक्सेस नहीं है। ऑफिस से अपना Solar Circle Role सेट करवाएं।"
+        "NOACCESS" -> "आपके रोल में यह काम नहीं है। मैनेजर से कहें।"
         else -> en
     }
 }

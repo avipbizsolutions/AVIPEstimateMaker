@@ -47,7 +47,7 @@ class StockReviewActivity : AppCompatActivity() {
             addView(kv(tr("Items counted", "गिने गए आइटम"), "${counted.size} of ${items.size}"))
             addView(kv(tr("Changed vs last count", "पिछली गिनती से बदले"), "${changed.size}"))
             if (newOnes.isNotEmpty()) addView(kv(tr("Counted for the first time", "पहली बार गिने"), "${newOnes.size}"))
-            if (Session.founder(this@StockReviewActivity))
+            if (Can.stockValue(this@StockReviewActivity))
                 addView(kv(tr("Stock value (today's rates, before GST)", "स्टॉक वैल्यू (आज के रेट, GST से पहले)"),
                     Fmt.lakh(counted.sumOf { Stock.value(it, d.qty(it) ?: 0.0) })))
         }, lp().margins(this, b = 12))

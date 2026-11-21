@@ -12,6 +12,8 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 import androidx.core.content.FileProvider
 import java.io.File
 import java.text.SimpleDateFormat
@@ -27,7 +29,8 @@ class StockCurrentActivity : AppCompatActivity() {
     private lateinit var chips: LinearLayout
     private var show = Show.ALL
     private var query = ""
-    private val founder by lazy { Session.founder(this) }
+    private val founder by lazy { Can.stockValue(this) }
+    private val exact by lazy { Can.stockQty(this) }
     private val df = SimpleDateFormat("d MMM yyyy", Locale.ENGLISH)
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -42,7 +45,8 @@ class StockCurrentActivity : AppCompatActivity() {
             setOnClickListener { shareReport() }
         }
         val root = vertical()
-        root.addView(topBar(tr("Current stock", "मौजूदा स्टॉक"),
+        if (!exact) share.visibility = android.view.View.GONE
+        root.addView(topBar(if (exact) tr("Current stock", "मौजूदा स्टॉक") else tr("Stock availability", "स्टॉक उपलब्धता"),
             last?.let { tr("Last count ", "पिछली गिनती ") + df.format(Date(it.date)) + " · " + it.by } ?: Stock.godown, right = listOf(share)))
         root.addView(input(tr("Search product, brand…", "प्रोडक्ट, ब्रांड खोजें…")).apply {
             background = rounded(Color.WHITE, dpf(24f), Ui.LINE, dp(1))
@@ -64,6 +68,12 @@ class StockCurrentActivity : AppCompatActivity() {
         }, lp(MATCH, 0, 1f))
         setEdgeContent(root)
         render()
+        lifecycleScope.launch {
+            try { Stock.refresh(this@StockCurrentActivity) } catch (e: ApiException) {
+                if (e.code == "SESSION" || e.code == "NOTEAM") { goLogin(this@StockCurrentActivity, e.message); return@launch }
+            }
+            render()
+        }
     }
 
     private fun qtyOf(p: Product) = Stock.current[p.id]?.qty
@@ -83,8 +93,8 @@ class StockCurrentActivity : AppCompatActivity() {
         val items = Stock.items()
         chips.removeAllViews()
         listOf(Show.ALL to tr("All", "सभी"), Show.IN to tr("In stock", "स्टॉक में"),
-            Show.LOW to tr("Below min (${items.count { Stock.isLow(it, qtyOf(it)) }})", "न्यूनतम से कम (${items.count { Stock.isLow(it, qtyOf(it)) }})"),
-            Show.ZERO to tr("Zero (${items.count { (qtyOf(it) ?: 1.0) <= 0 }})", "शून्य (${items.count { (qtyOf(it) ?: 1.0) <= 0 }})"),
+            Show.LOW to if (!exact) tr("Low", "कम") else tr("Below min (${items.count { Stock.isLow(it, qtyOf(it)) }})", "न्यूनतम से कम (${items.count { Stock.isLow(it, qtyOf(it)) }})"),
+            Show.ZERO to if (!exact) tr("Out", "खत्म") else tr("Zero (${items.count { (qtyOf(it) ?: 1.0) <= 0 }})", "शून्य (${items.count { (qtyOf(it) ?: 1.0) <= 0 }})"),
             Show.NEVER to tr("Never counted", "कभी नहीं गिने")).forEach { (k, label) ->
             val on = show == k
             chips.addView(text(label, 14.5f, if (on) Color.WHITE else Ui.TEXT, bold = on) {
@@ -118,7 +128,8 @@ class StockCurrentActivity : AppCompatActivity() {
                             val status = when {
                                 q == null -> tr("Never counted", "कभी नहीं गिना") to Ui.MUTED
                                 q <= 0 -> tr("Zero stock", "शून्य स्टॉक") to Ui.DANGER
-                                Stock.isLow(p, q) -> tr("Below min ${Fmt.qty(cur?.min ?: 0.0)}", "न्यूनतम ${Fmt.qty(cur?.min ?: 0.0)} से कम") to 0xFFB7791F.toInt()
+                                Stock.isLow(p, q) -> (if (exact) tr("Below min ${Fmt.qty(cur?.min ?: 0.0)}", "न्यूनतम ${Fmt.qty(cur?.min ?: 0.0)} से कम")
+                                    else tr("Low stock", "स्टॉक कम")) to 0xFFB7791F.toInt()
                                 founder && p.unitPrice != null -> "${Fmt.inr(p.unitPrice!!)} / ${p.unit.lowercase()}" to Ui.MUTED
                                 else -> (cur?.lastCounted?.takeIf { it > 0 }?.let { tr("Counted ", "गिना ") + df.format(Date(it)) } ?: "") to Ui.MUTED
                             }
@@ -127,7 +138,8 @@ class StockCurrentActivity : AppCompatActivity() {
                         }, lp(0, WRAP, 1f).margins(context, r = 8))
                         addView(vertical {
                             gravity = Gravity.END
-                            addView(text((q?.let { Fmt.qty(it) } ?: "—") + " " + p.unit, 18f, Ui.TEXT, bold = true) { gravity = Gravity.END })
+                            addView(text(if (!exact) (when { q == null -> "—"; q <= 0 -> tr("Out", "खत्म"); Stock.isLow(p, q) -> tr("Low", "कम"); else -> tr("In stock", "उपलब्ध") })
+                                else (q?.let { Fmt.qty(it) } ?: "—") + " " + p.unit, 18f, Ui.TEXT, bold = true) { gravity = Gravity.END })
                             if (founder && q != null && q > 0 && p.unitPrice != null)
                                 addView(text(Fmt.lakh(Stock.value(p, q)), 13.5f, Ui.MUTED) { gravity = Gravity.END })
                         })

@@ -41,10 +41,10 @@ class CustomerEstimatesActivity : AppCompatActivity() {
         buyer = Buyer.fromJson(runCatching { JSONObject(intent.getStringExtra(EXTRA_BUYER) ?: "") }.getOrNull())
             ?: run { finish(); return }
         val root = vertical()
-        root.addView(topBar(buyer.company, tr("Cost estimates by the AVIP Team", "AVIP टीम के बनाए लागत अनुमान")))
+        root.addView(topBar(buyer.company, if (Can.allEstimates(this)) tr("Cost estimates by the AVIP Team", "AVIP टीम के बनाए लागत अनुमान") else tr("Cost estimates I made", "मेरे बनाए लागत अनुमान")))
         list = vertical(14)
         root.addView(pullToRefresh(ScrollView(this).apply { addView(list) }) { load() }, lp(MATCH, 0, 1f))
-        root.addView(vertical(12) {
+        if (Can.estimate(this)) root.addView(vertical(12) {
             addView(pillButton(tr("+ New cost estimate", "+ नया लागत अनुमान"), Ui.BRAND, android.graphics.Color.WHITE, 52) { newEstimate() })
         })
         setEdgeContent(root)
@@ -118,8 +118,10 @@ class CustomerEstimatesActivity : AppCompatActivity() {
             return
         }
         val opts = mutableListOf(tr("Open PDF", "PDF खोलें"), tr("Send to customer on WhatsApp", "ग्राहक को WhatsApp पर भेजें"))
-        if (e.mine) opts += tr("Edit this cost estimate", "यह लागत अनुमान बदलें")
-        opts += tr("Edit as new cost estimate", "नए अनुमान के रूप में बदलें")
+        if (Can.estimate(this)) {
+            if (e.mine) opts += tr("Edit this cost estimate", "यह लागत अनुमान बदलें")
+            opts += tr("Edit as new cost estimate", "नए अनुमान के रूप में बदलें")
+        }
         AlertDialog.Builder(this).setTitle(e.number).setItems(opts.toTypedArray()) { _, which ->
             when (opts[which]) {
                 opts[0] -> withPdf(doc) { EstimateStore.open(this, it) }

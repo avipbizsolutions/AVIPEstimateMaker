@@ -105,7 +105,10 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launch {
             try {
                 if (Session.isTeam(this@MainActivity)) {
-                    Api.call(this@MainActivity, "teamMe", JSONObject().put("token", Session.token(this@MainActivity)))
+                    val o = Api.call(this@MainActivity, "teamMe", JSONObject().put("token", Session.token(this@MainActivity)))
+                    val before = Session.role(this@MainActivity)
+                    Session.setRole(this@MainActivity, o.optJSONObject("user")?.optString("circle"))
+                    if (Session.role(this@MainActivity) != before) recreate()   // role changed in the Team Directory
                 } else if (Session.isSaathi(this@MainActivity)) {
                     val o = Api.call(this@MainActivity, "me", JSONObject().put("token", Session.token(this@MainActivity)))
                     o.optJSONObject("profile")?.let { Vendor.store(this@MainActivity, it) }
@@ -230,7 +233,7 @@ class MainActivity : AppCompatActivity() {
 
         // Rates that changed since the last visit
         val changes = Catalog.priceChanges
-        if (changes.isNotEmpty()) {
+        if (changes.isNotEmpty() && Can.seeRates(this)) {
             val ups = Catalog.products.count { p -> changes[p.id]?.let { old -> (Catalog.compareRate(p) ?: old) > old } == true }
             val downs = changes.size - ups
             content.addView(card(12) {
@@ -281,37 +284,43 @@ class MainActivity : AppCompatActivity() {
             SaathiDirectory.loadCached(this)
             val target = TeamTarget.get(this)
             val n = SaathiDirectory.list.count { it.status.equals("Active", true) }
-            content.addView(toolGrid(listOf(
-                toolCard(R.drawable.ic_cart, Ui.BRAND,
+            val c = this
+            val stockDraft = Stock.Draft.get(this) != null
+            content.addView(toolGrid(listOfNotNull(
+                if (!Can.estimate(c)) null else toolCard(R.drawable.ic_cart, Ui.BRAND,
                     tr("New Cost Estimate", "नया लागत अनुमान"),
                     tr("For a B2B customer, at AVIP rates", "B2B ग्राहक के लिए, AVIP रेट पर"),
                     badge = if (Cart.count > 0 && target != null) tr("${Cart.count} items", "${Cart.count} आइटम") else null) {
                     if (Cart.count > 0 && target != null) open(EstimateActivity::class.java)
                     else open(SaathiListActivity::class.java) { putExtra(SaathiListActivity.EXTRA_PICK, true) }
                 },
-                toolCard(R.drawable.ic_history, 0xFF00897B.toInt(),
+                if (!Can.estimate(c)) null else toolCard(R.drawable.ic_history, 0xFF00897B.toInt(),
                     tr("Cost Estimates I made", "मेरे बनाए लागत अनुमान"),
                     tr("Open, share or edit saved estimates", "सेव किए अनुमान खोलें, भेजें या बदलें")) {
                     open(HistoryActivity::class.java)
                 },
                 toolCard(R.drawable.ic_person, 0xFF1565C0.toInt(),
                     tr("Surya Saathis", "सूर्य साथी"),
-                    if (n > 0) tr("$n active B2B customers", "$n सक्रिय B2B ग्राहक") else tr("Registered B2B customers", "रजिस्टर्ड B2B ग्राहक")) {
+                    if (Can.estimate(c)) { if (n > 0) tr("$n active B2B customers", "$n सक्रिय B2B ग्राहक") else tr("Registered B2B customers", "रजिस्टर्ड B2B ग्राहक") }
+                    else tr("Customers and their cost estimates", "ग्राहक और उनके लागत अनुमान")) {
                     open(SaathiListActivity::class.java)
                 },
-                toolCard(R.drawable.ic_stock, 0xFF8D6E00.toInt(),
+                if (Can.stockCount(c)) toolCard(R.drawable.ic_stock, 0xFF8D6E00.toInt(),
                     tr("Stock Take", "स्टॉक गिनती"),
-                    if (Stock.Draft.get(this) != null) tr("Count in progress", "गिनती चल रही है")
-                    else tr("Count godown stock", "गोदाम का स्टॉक गिनें"),
-                    badge = if (Stock.Draft.get(this) != null) tr("Draft", "ड्राफ्ट") else null) {
+                    if (stockDraft) tr("Count in progress", "गिनती चल रही है") else tr("Count godown stock", "गोदाम का स्टॉक गिनें"),
+                    badge = if (stockDraft) tr("Draft", "ड्राफ्ट") else null) {
                     open(StockActivity::class.java)
+                } else toolCard(R.drawable.ic_stock, 0xFF8D6E00.toInt(),
+                    tr("Stock availability", "स्टॉक उपलब्धता"),
+                    tr("In stock, low or out", "स्टॉक में, कम या खत्म")) {
+                    open(StockCurrentActivity::class.java)
                 },
-                toolCard(R.drawable.ic_tools, 0xFFEF6C00.toInt(),
+                if (!Can.installers(c)) null else toolCard(R.drawable.ic_tools, 0xFFEF6C00.toInt(),
                     tr("Find Installers", "इंस्टॉलर खोजें"),
                     tr("${Directory.installers.size} installers · call or WhatsApp", "${Directory.installers.size} इंस्टॉलर · कॉल या WhatsApp")) {
                     open(DirectoryActivity::class.java) { putExtra(DirectoryActivity.EXTRA_KIND, Directory.Kind.INSTALLERS.name) }
                 },
-                toolCard(R.drawable.ic_truck, 0xFF546E7A.toInt(),
+                if (!Can.transporters(c)) null else toolCard(R.drawable.ic_truck, 0xFF546E7A.toInt(),
                     tr("Transporters", "ट्रांसपोर्टर"),
                     tr("${Directory.transporters.size} pickups & tempos", "${Directory.transporters.size} पिकअप व टेम्पो")) {
                     open(DirectoryActivity::class.java) { putExtra(DirectoryActivity.EXTRA_KIND, Directory.Kind.TRANSPORTERS.name) }

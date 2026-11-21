@@ -130,8 +130,8 @@ class LoginActivity : AppCompatActivity() {
                 })
             }
             addView(saathiLinks, lp().margins(context, t = 10))
-            teamNote = text(tr("Use the same mobile number and PIN as in AVIP Solar Sales. For Managers and Founders. Forgot PIN? Ask the office to reset it in the Team Directory.",
-                "वही मोबाइल नंबर और PIN डालें जो AVIP Solar Sales में है। Managers और Founders के लिए। PIN भूल गए? ऑफिस से Team Directory में रीसेट करवाएं।"), 12f, Ui.MUTED)
+            teamNote = text(tr("Use your common AVIP login (same mobile number and PIN as AVIP Solar Sales / Expense). Access needs a Solar Circle Role in the Team Directory. Forgot PIN? Ask the office to reset it.",
+                "अपना AVIP लॉगिन डालें (वही मोबाइल नंबर और PIN जो AVIP Solar Sales / Expense में है)। एक्सेस के लिए Team Directory में Solar Circle Role ज़रूरी है। PIN भूल गए? ऑफिस से रीसेट करवाएं।"), 12f, Ui.MUTED)
             addView(teamNote, lp().margins(context, t = 12))
         })
         form.addView(View(this), lp(MATCH, dp(24)))
@@ -190,7 +190,7 @@ class LoginActivity : AppCompatActivity() {
             try {
                 if (team) {
                     val o = Api.call(this@LoginActivity, "teamLogin", JSONObject().put("mobile", m).put("pin", p).put("deviceId", Vendor.installId(this@LoginActivity)))
-                    Session.saveTeam(this@LoginActivity, o.getString("token"), o.getJSONObject("user"), o.optBoolean("mustSetPin"), o.optBoolean("founder"))
+                    Session.saveTeam(this@LoginActivity, o.getString("token"), o.getJSONObject("user"), o.optBoolean("mustSetPin"), o.optBoolean("founder"), o.optString("role"))
                 } else {
                     val o = Api.call(this@LoginActivity, "login", JSONObject().put("mobile", m).put("pin", p))
                     Session.saveSaathi(this@LoginActivity, o.getString("token"), o.getJSONObject("profile"), o.optBoolean("mustSetPin"))

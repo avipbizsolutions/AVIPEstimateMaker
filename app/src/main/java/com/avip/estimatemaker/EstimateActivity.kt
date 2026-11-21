@@ -113,8 +113,10 @@ class EstimateActivity : AppCompatActivity() {
         if (Cart.count > 0) {
             body.addView(card(12) {
                 background = rounded(0xFFE8F3EC.toInt(), dpf(14f))
-                addView(text(if (team) tr("Tap a rate to give a special rate. The PDF goes to ${buyer().company} with your name as \"Prepared by\".",
+                addView(text(if (Can.specialRates(this@EstimateActivity)) tr("Tap a rate to give a special rate. The PDF goes to ${buyer().company} with your name as \"Prepared by\".",
                     "विशेष रेट देने के लिए रेट पर टैप करें। PDF ${buyer().company} को आपके नाम (\"Prepared by\") के साथ जाएगा।")
+                else if (team) tr("The PDF goes to ${buyer().company} at sheet rates with your name as \"Prepared by\". For a special rate, ask your Sales Manager.",
+                    "PDF ${buyer().company} को शीट रेट पर आपके नाम (\"Prepared by\") के साथ जाएगा। विशेष रेट के लिए अपने सेल्स मैनेजर से कहें।")
                 else tr("This cost estimate is addressed to ${Vendor.company(context)} at AVIP B2B rates. To place the order, send the PDF to AVIP on WhatsApp.", "यह लागत अनुमान ${Vendor.company(context)} के लिए AVIP B2B रेट पर है। ऑर्डर देने के लिए PDF को WhatsApp पर AVIP को भेजें।"), 12.5f, Ui.BRAND_DARK))
             }, lp().margins(this, t = 8))
         }
@@ -145,7 +147,7 @@ class EstimateActivity : AppCompatActivity() {
                             minHeight = dp(40)
                             gravity = Gravity.CENTER
                         }, lp(WRAP, WRAP).margins(context, l = 8))
-                        if (team) setOnClickListener { specialRate(l) }
+                        if (Can.specialRates(this@EstimateActivity)) setOnClickListener { specialRate(l) }
                     }, lp().margins(context, t = 2))
                 }, lp(0, WRAP, 1f).margins(context, l = 10))
                 addView(icon(R.drawable.ic_delete, Ui.DANGER, 46).apply {

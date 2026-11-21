@@ -68,7 +68,7 @@ class SaathiListActivity : AppCompatActivity() {
         root.addView(status)
         list = vertical(12)
         root.addView(pullToRefresh(ScrollView(this).apply { addView(list) }) { reload() }, lp(MATCH, 0, 1f))
-        root.addView(vertical {
+        if (Can.addSaathi(this)) root.addView(vertical {
             setPadding(dp(16), dp(10), dp(16), dp(12))
             setBackgroundColor(Color.WHITE)
             elevation = dpf(8f)
@@ -160,7 +160,10 @@ class SaathiListActivity : AppCompatActivity() {
                 EstimateStore.chatNumber(this@SaathiListActivity, b.mobile,
                     "Namaste ${b.contact.substringBefore(' ')} ji, this is ${Session.teamName(this@SaathiListActivity)} from AVIP Business Solutions LLP (Bihar Solar Circle).")
             }, lp(0, WRAP, 1f).margins(context, l = 8))
-            addView(pillButton(tr("Estimate", "अनुमान"), 0xFFEFF3F1.toInt(), Ui.TEXT, 40) { choose(b) }, lp(0, WRAP, 1f).margins(context, l = 8))
+            if (Can.estimate(this@SaathiListActivity))
+                addView(pillButton(tr("Estimate", "अनुमान"), 0xFFEFF3F1.toInt(), Ui.TEXT, 40) { choose(b) }, lp(0, WRAP, 1f).margins(context, l = 8))
+            else addView(pillButton(tr("Estimates", "अनुमान"), 0xFFEFF3F1.toInt(), Ui.TEXT, 40) {
+                CustomerEstimatesActivity.open(this@SaathiListActivity, b) }, lp(0, WRAP, 1f).margins(context, l = 8))
         }, lp().margins(context, t = 10))
         setOnClickListener {
             if (blocked) Toast.makeText(this@SaathiListActivity, tr("This account is blocked in the Surya Saathi sheet", "यह अकाउंट Surya Saathi शीट में रोका गया है"), Toast.LENGTH_SHORT).show()
@@ -192,11 +195,16 @@ class SaathiListActivity : AppCompatActivity() {
 
     /** Edit / delete menu for one Surya Saathi. */
     private fun manage(b: Buyer) {
+        val acts = mutableListOf<Pair<String, () -> Unit>>(
+            (if (Can.allEstimates(this)) tr("Cost estimates by the team", "टीम के लागत अनुमान") else tr("My cost estimates for them", "इनके लिए मेरे अनुमान"))
+                to { CustomerEstimatesActivity.open(this, b) })
+        if (Can.editSaathi(this)) acts += tr("Edit details", "जानकारी बदलें") to { customerDialog(b) }
+        else if (Can.editGst(this)) acts += tr("Edit GSTIN / address", "GSTIN / पता बदलें") to { customerDialog(b) }
+        if (Can.deleteSaathi(this)) acts += tr("Delete Surya Saathi", "सूर्य साथी हटाएं") to { confirmDelete(b) }
         AlertDialog.Builder(this)
             .setTitle(b.company)
-            .setItems(arrayOf(tr("Cost estimates by the team", "टीम के लागत अनुमान"), tr("Edit details", "जानकारी बदलें"), tr("Delete Surya Saathi", "सूर्य साथी हटाएं"))) { _, i ->
-                when (i) { 0 -> CustomerEstimatesActivity.open(this, b); 1 -> customerDialog(b); else -> confirmDelete(b) }
-            }.show()
+            .setItems(acts.map { it.first }.toTypedArray()) { _, i -> acts[i].second() }
+            .show()
     }
 
     private fun confirmDelete(b: Buyer) {
@@ -232,6 +240,8 @@ class SaathiListActivity : AppCompatActivity() {
         }
         val city = input(tr("City / District", "शहर / ज़िला"), InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_WORDS, existing?.city ?: "")
         val address = input(tr("Address", "पता"), InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES or InputType.TYPE_TEXT_FLAG_MULTI_LINE, existing?.address ?: "")
+        // Accountant: only GSTIN and address can change.
+        if (existing != null && !Can.editSaathi(this)) listOf(company, contact, mobile, city).forEach { it.isEnabled = false; it.alpha = 0.6f }
         val form = vertical(18) {
             listOf(company, contact, mobile, gst, city, address).forEach { addView(it, lp().margins(context, b = 8)) }
             addView(text(if (existing == null) tr("They can later login with this mobile number and PIN 1234.", "वे बाद में इसी मोबाइल नंबर और PIN 1234 से लॉगिन कर सकते हैं।")

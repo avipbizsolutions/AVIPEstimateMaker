@@ -28,7 +28,8 @@
  */
 const SHEET_ID = '1TEhXDY6fUY93h63IZzhWFwxA0pXwFkNflybA9hO9DVc';
 const SHARED_KEY = 'avip-estimate-9Fk2'; // must match Vendor.kt / Api.kt
-const AUTH_APP = 'sales';                // team logins use the AVIP Solar Sales access
+// Team logins: the "Solar Circle Role" column of the AVIP Team Directory (app "circle" in AVIP Auth).
+// Until AVIP Auth is updated, it falls back to the AVIP Solar Sales access (Managers) + Expense Admin (Founders).
 const DEFAULT_PIN = '1234';
 
 // "Surya Saathi" tab: the first 8 columns are the original ones; the rest are added by setup().
@@ -46,10 +47,10 @@ function doPost(e) {
 
     // ---- AVIP Team (read-only or no sheet writes: no lock) ----
     if (d.kind === 'teamLogin') return reply(teamLogin(d));
-    if (d.kind === 'teamSetPin') return reply(Object.assign({ ok: true }, authSetPin_(AUTH_APP, d)));
+    if (d.kind === 'teamSetPin') return reply(Object.assign({ ok: true }, teamAuth_(app => authSetPin_(app, d))));
     if (d.kind === 'teamMe') return reply({ ok: true, user: teamUser(d, true) });
     if (d.kind === 'saathiList') { teamUser(d); return reply({ ok: true, saathis: saathiList() }); }
-    if (d.kind === 'customerEstimates') { teamUser(d); return reply({ ok: true, estimates: customerEstimates(d) }); }
+    if (d.kind === 'customerEstimates') return reply({ ok: true, estimates: customerEstimates(d, teamUser(d)) });
 
     lock.waitLock(20000);
     const book = SpreadsheetApp.openById(SHEET_ID);
@@ -87,7 +88,7 @@ function doPost(e) {
       ensureHeaders(log, QUOTE_COLS);
       let madeBy = 'Surya Saathi';
       if (d.teamToken) {
-        try { const u = teamUser({ token: d.teamToken }); madeBy = u.name + ' (AVIP ' + (isFounder(u) ? 'Founder' : 'Manager') + ')'; }
+        try { const u = teamUser({ token: d.teamToken }); madeBy = u.name + ' (AVIP ' + u.circle + ')'; }
         catch (_) { madeBy = 'AVIP Team (login expired)'; }
       }
       // The phone may resend after a slow reply: log each estimate once. The key is number + customer
@@ -153,7 +154,7 @@ function setup() {
     ScriptApp.newTrigger('syncPhotos').timeBased().everyMinutes(5).create();
   }
   try {
-    Logger.log('Team login OK: ' + authUsers_(AUTH_APP).length + ' people in the AVIP Team Directory with Sales access.');
+    Logger.log('Team login OK: ' + teamAuth_(app => authUsers_(app)).length + ' people in the AVIP Team Directory can use Bihar Solar Circle.');
   } catch (e) {
     Logger.log('Team login not ready: ' + e.message);
   }
@@ -271,20 +272,64 @@ function profileOf(row) {
 // AVIP Team (Managers and Founders)
 // =====================================================================
 
-function isFounder(u) { return !!(u && u.roles && clean(u.roles.expense) === 'Admin'); }
-function isManager(u) { return !!u && (u.role === 'Manager' || isFounder(u)); }
+// Roles (Solar Circle Role): what each one may do. The app shows / hides the same things.
+const RIGHTS = {
+  estimate:     ['Founder', 'Sales Manager', 'Sales Executive'],
+  specialRates: ['Founder', 'Sales Manager'],
+  addSaathi:    ['Founder', 'Sales Manager', 'Sales Executive'],
+  editSaathi:   ['Founder', 'Sales Manager'],
+  editGst:      ['Founder', 'Sales Manager', 'Accountant'],
+  deleteSaathi: ['Founder'],
+  allEstimates: ['Founder', 'Sales Manager', 'Accountant', 'Dispatch'],
+  stockCount:   ['Founder', 'Sales Manager', 'Accountant', 'Dispatch'],
+  stockQty:     ['Founder', 'Sales Manager', 'Accountant', 'Dispatch'],
+  stockValue:   ['Founder'],
+  photo:        ['Founder', 'Sales Manager', 'Dispatch'],
+};
+const CIRCLE_ROLES = ['Founder', 'Sales Manager', 'Sales Executive', 'Accountant', 'Dispatch'];
 
-function teamLogin(d) {
-  const r = authLogin_(AUTH_APP, d);           // { token, user, mustSetPin }
-  if (!isManager(r.user)) return { ok: false, error: 'NOTEAM: Bihar Solar Circle is for AVIP Managers and Founders only.' };
-  return Object.assign({ ok: true }, r, { founder: isFounder(r.user) });
+/** Runs fn(app) with AVIP Auth's "circle" app; falls back to "sales" while AVIP Auth is not updated yet. */
+function teamAuth_(fn) {
+  const cache = CacheService.getScriptCache();
+  if (cache.get('authApp') !== 'sales') {
+    try { return fn('circle'); } catch (e) {
+      if (!/Unknown app/i.test(String(e && e.message))) throw e;
+      cache.put('authApp', 'sales', 600);
+    }
+  }
+  return fn('sales');
 }
 
-/** The logged-in team member; must be a Manager or Founder. */
+/** Bihar Solar Circle role of a team member ('' = no access). */
+function circleRole(u) {
+  if (!u) return '';
+  const r = clean(u.roles && u.roles.circle);
+  if (r) return CIRCLE_ROLES.indexOf(r) >= 0 ? r : '';
+  if (u.roles && 'circle' in u.roles) return '';            // AVIP Auth updated: the column decides
+  if (clean(u.roles && u.roles.expense) === 'Admin') return 'Founder';
+  return clean(u.role) === 'Manager' ? 'Sales Manager' : '';
+}
+function can(u, right) { return RIGHTS[right].indexOf(u.circle || circleRole(u)) >= 0; }
+function need(u, right) {
+  if (!can(u, right)) throw new Error('NOACCESS: Your role (' + (u.circle || circleRole(u)) + ') cannot do this. Please ask a manager.');
+}
+function isFounder(u) { return circleRole(u) === 'Founder'; }
+
+function teamLogin(d) {
+  const r = teamAuth_(app => authLogin_(app, d));      // { token, user, mustSetPin }
+  const role = circleRole(r.user);
+  if (!role) return { ok: false, error: 'NOTEAM: You do not have access to Bihar Solar Circle. Please ask the office to set your Solar Circle Role.' };
+  r.user.circle = role;
+  return Object.assign({ ok: true }, r, { founder: role === 'Founder', role: role });
+}
+
+/** The logged-in team member (u.circle = their role). */
 function teamUser(d, allowTempPin) {
-  const u = authUser_(AUTH_APP, d, allowTempPin);
-  if (!isManager(u)) throw new Error('NOTEAM: Bihar Solar Circle is for AVIP Managers and Founders only.');
-  u.founder = isFounder(u);
+  const u = teamAuth_(app => authUser_(app, d, allowTempPin));
+  const role = circleRole(u);
+  if (!role) throw new Error('NOTEAM: You do not have access to Bihar Solar Circle. Please ask the office.');
+  u.circle = role;
+  u.founder = role === 'Founder';
   return u;
 }
 
@@ -320,12 +365,15 @@ function setStockDraft_(dr) {
 }
 
 function stockStatus(book, d) {
-  teamUser(d);
+  const u = teamUser(d);
   const { counts, cur } = stockSheets_(book);
-  const current = data(cur).filter(r => String(r[0])).map(r => ({
+  let current = data(cur).filter(r => String(r[0])).map(r => ({
     id: String(r[0]), qty: Number(r[4]) || 0, min: r[5] === '' ? null : Number(r[5]),
     lastCounted: r[6] instanceof Date ? r[6].getTime() : 0, by: String(r[7] || ''), note: String(r[9] || ''),
   }));
+  // Sales Executives see only In stock / Low / Out, not the counts.
+  if (!can(u, 'stockQty')) current = current.map(c => ({ id: c.id, qty: c.qty > 0 ? 1 : 0,
+    low: c.qty > 0 && c.min !== null && c.qty < c.min, min: null, lastCounted: c.lastCounted, by: '', note: '' }));
   // Past counts, newest first (summary per Count ID).
   const byId = {};
   data(counts).forEach(r => {
@@ -339,6 +387,7 @@ function stockStatus(book, d) {
 
 function stockStart(d) {
   const u = teamUser(d);
+  need(u, 'stockCount');
   const mobile = last10(u.mobile);
   const dr = stockDraft_();
   if (dr && dr.mobile !== mobile && !d.force) return { ok: false, error: 'BUSY: ' + dr.by + ' is already counting (started ' +
@@ -359,6 +408,7 @@ function stockCancel(d) {
 /** items: [{ id, category, name, unit, qty, note }] — only the items counted this time. */
 function stockSubmit(book, d) {
   const u = teamUser(d);
+  need(u, 'stockCount');
   const dr = stockDraft_();
   if (dr && dr.mobile !== last10(u.mobile)) return { ok: false, error: 'BUSY: ' + dr.by + ' is counting now. Submit after they finish.' };
   const items = (d.items || []).filter(it => clean(it.id));
@@ -390,13 +440,14 @@ function stockSubmit(book, d) {
 }
 
 /** AVIP Team: every cost estimate logged for one B2B customer (by any team member or the Saathi). */
-function customerEstimates(d) {
+function customerEstimates(d, u) {
   const mobile = last10(d.mobile);
+  const own = !can(u, 'allEstimates');
   if (mobile.length !== 10) return [];
   const log = SpreadsheetApp.openById(SHEET_ID).getSheetByName('Quotations Log');
   if (!log || log.getLastRow() < 2) return [];
   return log.getRange(2, 1, log.getLastRow() - 1, 14).getValues()
-    .filter(r => last10(r[4]) === mobile)
+    .filter(r => last10(r[4]) === mobile && (!own || String(r[10] || '').indexOf(u.name + ' (AVIP') === 0))
     .map(r => ({
       createdAt: r[0] instanceof Date ? r[0].getTime() : 0,
       number: String(r[1] || ''), company: String(r[2] || ''), items: String(r[6] || ''),
@@ -421,6 +472,7 @@ function saathiList() {
 /** A manager adds a B2B customer who isn't in the app yet (they can later login with PIN 1234). */
 function addSaathi(sheet, d) {
   const u = teamUser({ token: d.token });
+  need(u, 'addSaathi');
   const mobile = last10(d.mobile);
   if (!/^[6-9]\d{9}$/.test(mobile)) return { ok: false, error: 'Enter a valid 10-digit mobile number.' };
   if (clean(d.company).length < 2) return { ok: false, error: 'Company name is required.' };
@@ -439,9 +491,14 @@ function addSaathi(sheet, d) {
 /** A manager corrects a Surya Saathi's details. A new mobile number resets the PIN to 1234. */
 function editSaathi(sheet, d) {
   const u = teamUser({ token: d.token });
+  if (!can(u, 'editSaathi')) need(u, 'editGst');
   const rows = data(sheet);
   const i = rows.findIndex(r => last10(r[3]) === last10(d.mobile));
   if (i < 0) return { ok: false, error: 'This Surya Saathi is no longer in the sheet. Pull down to refresh the list.' };
+  if (!can(u, 'editSaathi')) {
+    // Accountant: only GSTIN and address change; the rest stays as it is.
+    d.company = rows[i][1]; d.contact = rows[i][2]; d.city = rows[i][5]; d.newMobile = '';
+  }
   const mobile = last10(d.newMobile || d.mobile);
   if (!/^[6-9]\d{9}$/.test(mobile)) return { ok: false, error: 'Enter a valid 10-digit mobile number.' };
   if (clean(d.company).length < 2) return { ok: false, error: 'Company name is required.' };
@@ -462,6 +519,7 @@ function editSaathi(sheet, d) {
 /** A manager deletes a Surya Saathi: their row goes; their logged estimates stay as records. */
 function deleteSaathi(book, sheet, d) {
   const u = teamUser({ token: d.token });
+  need(u, 'deleteSaathi');
   const mobile = last10(d.mobile);
   const removed = deleteRows(sheet, r => last10(r[3]) === mobile);
   if (!removed) return { ok: false, error: 'This Surya Saathi is no longer in the sheet.' };
@@ -668,6 +726,7 @@ function photoFolder_() {
 /** Manager / Founder sets (or removes, with no image) a product's photo from the app. */
 function setPhoto(book, d) {
   const u = teamUser({ token: d.token });
+  need(u, 'photo');
   const id = String(d.id || '').trim();
   if (!id) return { ok: false, error: 'No product' };
   let url = '';

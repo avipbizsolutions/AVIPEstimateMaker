@@ -99,7 +99,7 @@ object Cart {
         lines.clear()
         setEditing(context, if (edit) doc.number else "")
         lines += doc.lines.filter { it.productId != null }.map { it.copy() }
-            .onEach { if (!Session.isTeam(context)) it.special = false }
+            .onEach { if (!Can.specialRates(context)) it.special = false }
         reprice(context)
         changed(context)
     }

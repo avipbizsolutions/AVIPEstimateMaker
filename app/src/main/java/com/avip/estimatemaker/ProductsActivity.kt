@@ -175,10 +175,10 @@ class ProductsActivity : AppCompatActivity(), PhotoEditor {
         val searchMode = intent.getBooleanExtra(EXTRA_SEARCH, false)
 
         val root = vertical()
-        cartIcon = cartButton()
+        cartIcon = cartButton().apply { if (!Can.estimate(this@ProductsActivity)) visibility = View.GONE }
         val count = Catalog.products.count { category == null || it.category == category }
         if (changedOnly) category = null
-        root.addView(topBar(if (changedOnly) tr("Rate changes", "रेट में बदलाव") else category ?: tr("Search Products", "प्रोडक्ट खोजें"), if (category != null) tr("$count items · rates before GST", "$count आइटम · रेट GST से पहले") else tr("All categories", "सभी कैटेगरी"), right = listOf(cartIcon)))
+        root.addView(topBar(if (changedOnly) tr("Rate changes", "रेट में बदलाव") else category ?: tr("Search Products", "प्रोडक्ट खोजें"), if (category != null) (if (Can.seeRates(this)) tr("$count items · rates before GST", "$count आइटम · रेट GST से पहले") else tr("$count items", "$count आइटम")) else tr("All categories", "सभी कैटेगरी"), right = listOf(cartIcon)))
 
         if (searchMode) {
             val box = input(tr("Type product, brand or size…", "प्रोडक्ट, ब्रांड या साइज़ लिखें…"), InputType.TYPE_CLASS_TEXT).apply {
@@ -256,7 +256,7 @@ class ProductsActivity : AppCompatActivity(), PhotoEditor {
 
         list.removeAllViews()
         offlineBanner(this)?.let { list.addView(it, lp().margins(this, b = 10)) }
-        if (Session.isTeam(this)) list.addView(text("📷 " + tr("AVIP Team: long-press a product photo to change it", "AVIP टीम: फ़ोटो बदलने के लिए प्रोडक्ट फ़ोटो को देर तक दबाएं"),
+        if (Can.photo(this)) list.addView(text("📷 " + tr("AVIP Team: long-press a product photo to change it", "AVIP टीम: फ़ोटो बदलने के लिए प्रोडक्ट फ़ोटो को देर तक दबाएं"),
             11.5f, Ui.MUTED), lp().margins(this, b = 8))
         // Brand A → Z (no brand last); in search results, by category first so headings stay together.
         val catOrder = Catalog.categories().map { it.name }
@@ -339,6 +339,7 @@ fun variantCard(a: Activity, variants: List<Product>, onChange: () -> Unit): Vie
                 })
                 val price = v.unitPrice
                 val priceText = when {
+                    !Can.seeRates(a) -> v.spec
                     price == null -> tr("Rate on request", "रेट पूछें")
                     v.perWp && v.rate != null -> "₹${Fmt.num(v.rate)}/Wp · ${v.spec}"
                     else -> Fmt.inr(price, price < 100)
@@ -375,7 +376,7 @@ fun productCard(a: Activity, p: Product, title: String = p.name, extra: View? = 
         addView(horizontal {
             gravity = Gravity.CENTER_VERTICAL
             addView(productPhoto(p, p.icon, 60).apply {
-                if (Session.isTeam(a) && a is PhotoEditor) setOnLongClickListener { a.editPhoto(p); true }
+                if (Can.photo(a) && a is PhotoEditor) setOnLongClickListener { a.editPhoto(p); true }
             })
             addView(vertical {
                 if (p.brand.isNotBlank()) addView(text(p.brand.uppercase(), 10.5f, Ui.categoryColor(p.icon), bold = true) {
@@ -385,7 +386,11 @@ fun productCard(a: Activity, p: Product, title: String = p.name, extra: View? = 
                 val sub = listOf(p.spec, tr("per ", "प्रति ") + p.unit.lowercase()).filter { it.isNotBlank() }.joinToString(" · ")
                 addView(text(sub, 11.5f, Ui.MUTED))
                 if (p.notes.isNotBlank() && p.available) addView(text(p.notes, 11f, 0xFFB26A00.toInt()))
-                if (p.available) {
+                if (!Can.seeRates(a)) {
+                    // Dispatch: products without rates.
+                    addView(text(if (p.inStock) tr("In stock list", "स्टॉक लिस्ट में") else tr("Not available now", "अभी उपलब्ध नहीं"),
+                        12.5f, if (p.inStock) Ui.BRAND else Ui.MUTED, bold = true), lp().margins(context, t = 4))
+                } else if (p.available) {
                     val price = p.unitPrice!!
                     priceChangeView(a, p)?.let { addView(it, lp().margins(context, t = 4)) }
                     if (p.perWp && p.rate != null) {
@@ -400,7 +405,8 @@ fun productCard(a: Activity, p: Product, title: String = p.name, extra: View? = 
                     addView(text(if (p.inStock) tr("Price not listed right now", "अभी रेट उपलब्ध नहीं") else tr("Currently not available", "अभी स्टॉक में नहीं"), 11f, Ui.MUTED))
                 }
             }, lp(0, WRAP, 1f).margins(context, l = 12, r = 8))
-            if (p.available) addView(qtyControl(a, p, onChange))
+            if (!Can.estimate(a)) Unit
+            else if (p.available) addView(qtyControl(a, p, onChange))
             else addView(pillButton(tr("Ask AVIP", "AVIP से पूछें"), 0xFF25D366.toInt(), Color.WHITE, 38) {
                 EstimateStore.chatAvip(a, "Hello AVIP, please share the rate for ${p.title} ${p.spec}.")
             })

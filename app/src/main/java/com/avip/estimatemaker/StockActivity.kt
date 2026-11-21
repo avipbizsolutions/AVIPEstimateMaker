@@ -27,7 +27,7 @@ class StockActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        if (!Session.isTeam(this)) { finish(); return }
+        if (!Can.stockCount(this)) { startActivity(android.content.Intent(this, StockCurrentActivity::class.java)); finish(); return }
         if (!Catalog.isLoaded) Catalog.loadCached(this)
         Stock.loadCached(this)
         val root = vertical()
@@ -65,7 +65,7 @@ class StockActivity : AppCompatActivity() {
         val zero = counted.count { (Stock.current[it.id]?.qty ?: 0.0) <= 0.0 }
         val low = counted.count { Stock.isLow(it, Stock.current[it.id]?.qty) }
         list.addView(horizontal {
-            if (Session.founder(this@StockActivity)) {
+            if (Can.stockValue(this@StockActivity)) {
                 val v = counted.sumOf { Stock.value(it, Stock.current[it.id]?.qty ?: 0.0) }
                 addView(stat(Fmt.lakh(v), tr("Stock value", "स्टॉक वैल्यू"), Ui.BRAND), lp(0, WRAP, 1f).margins(context, r = 8))
             }
