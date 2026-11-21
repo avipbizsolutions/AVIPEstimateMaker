@@ -283,9 +283,17 @@ class EstimateActivity : AppCompatActivity() {
             buyer = b,
             madeBy = if (team) Session.teamName(this) else "",
         )
+        val teamEdit = Cart.editingTeam(this)
+        val editDevice = Cart.editDevice(this)
         lifecycleScope.launch {
             val file = try {
-                withContext(Dispatchers.IO) { EstimateStore.save(this@EstimateActivity, doc) }
+                withContext(Dispatchers.IO) {
+                    // A colleague's estimate: the PDF is made here but not saved in My Cost Estimates,
+                    // so it never overwrites my own estimate with the same number.
+                    if (teamEdit) File(File(cacheDir, "shared").apply { mkdirs() },
+                        doc.number.replace(Regex("[^A-Za-z0-9_-]"), "_") + ".pdf").also { PdfMaker(this@EstimateActivity).make(doc, it) }
+                    else EstimateStore.save(this@EstimateActivity, doc)
+                }
             } catch (e: Exception) {
                 Toast.makeText(this@EstimateActivity, tr("Couldn't create PDF: ", "PDF नहीं बना: ") + e.message, Toast.LENGTH_LONG).show(); return@launch
             }
@@ -293,6 +301,7 @@ class EstimateActivity : AppCompatActivity() {
                 .put("kind", "estimate")
                 .put("number", doc.number)
                 .put("revised", editing.isNotBlank())
+                .put("editDevice", if (editing.isNotBlank()) editDevice else "")
                 .put("doc", doc.toJson().toString())
                 .put("company", b.company)
                 .put("contact", b.contact)

@@ -86,27 +86,38 @@ function doPost(e) {
     } else if (d.kind === 'estimate') {
       const log = book.getSheetByName('Quotations Log');
       ensureHeaders(log, QUOTE_COLS);
-      let madeBy = 'Surya Saathi';
+      let madeBy = 'Surya Saathi', editor = null;
       if (d.teamToken) {
-        try { const u = teamUser({ token: d.teamToken }); madeBy = u.name + ' (AVIP ' + u.circle + ')'; }
+        try { editor = teamUser({ token: d.teamToken }); madeBy = editor.name + ' (AVIP ' + editor.circle + ')'; }
         catch (_) { madeBy = 'AVIP Team (login expired)'; }
       }
       // The phone may resend after a slow reply: log each estimate once. The key is number + customer
       // mobile + phone, as two phones can use the same number. An edited estimate keeps its number:
-      // its row is updated in place.
+      // its row is updated in place. A manager editing a colleague's estimate sends that phone's
+      // ID (editDevice), so the colleague's row is updated and stays theirs.
       const last = log.getLastRow();
       const dev = clean(d.installId);
+      const owner = clean(d.editDevice) || dev;
+      if (owner !== dev && !(editor && can(editor, 'editTeamEstimates')))
+        return reply({ ok: false, error: 'NOACCESS: Only Founders and Sales Managers can edit a colleague\'s estimate.' });
       const keyOf = r => String(r[1]) + '|' + last10(r[4]) + '|' + String(r[12] || '');
-      const key = clean(d.number) + '|' + last10(d.mobile) + '|' + dev;
+      const key = clean(d.number) + '|' + last10(d.mobile) + '|' + owner;
       const old = clean(d.number) + '|' + last10(d.mobile) + '|';
-      const keys = last > 1 ? log.getRange(2, 1, last - 1, 13).getValues().map(keyOf) : [];
+      const vals = last > 1 ? log.getRange(2, 1, last - 1, 13).getValues() : [];
+      const keys = vals.map(keyOf);
       let at = keys.lastIndexOf(key);
       if (at < 0 && d.revised) at = keys.lastIndexOf(old);
+      if (d.revised && at >= 0) {
+        // Keep who first made it; add who edited it.
+        const first = String(vals[at][10] || '').replace(/ \(edited\)$/, '').replace(/ · edited by .*$/, '');
+        const name = editor ? editor.name : madeBy;
+        madeBy = first && first.indexOf(name + ' (') !== 0 ? first + ' · edited by ' + name : madeBy + ' (edited)';
+      }
       const row = [
         new Date(), clean(d.number), clean(d.company), clean(d.contact), last10(d.mobile),
         clean(d.gst), clean(d.items, 2000),
         Number(d.subTotal) || 0, Number(d.gstAmount) || 0, Number(d.grandTotal) || 0,
-        madeBy + (d.revised ? ' (edited)' : ''), clean(d.special, 500), dev,
+        madeBy, clean(d.special, 500), owner,
         String(d.doc || '').slice(0, 45000),
       ];
       if (at >= 0) {
@@ -281,6 +292,7 @@ const RIGHTS = {
   editGst:      ['Founder', 'Sales Manager', 'Accountant'],
   deleteSaathi: ['Founder'],
   allEstimates: ['Founder', 'Sales Manager', 'Accountant', 'Dispatch'],
+  editTeamEstimates: ['Founder', 'Sales Manager'],
   stockCount:   ['Founder', 'Sales Manager', 'Accountant', 'Dispatch'],
   stockQty:     ['Founder', 'Sales Manager', 'Accountant', 'Dispatch'],
   stockValue:   ['Founder'],
@@ -453,6 +465,7 @@ function customerEstimates(d, u) {
       number: String(r[1] || ''), company: String(r[2] || ''), items: String(r[6] || ''),
       grandTotal: Number(r[9]) || 0, madeBy: String(r[10] || ''),
       mine: !!clean(d.installId) && String(r[12] || '') === clean(d.installId),
+      device: String(r[12] || ''),
       doc: String(r[13] || ''),
     }))
     .sort((a, b) => b.createdAt - a.createdAt).slice(0, 200);

@@ -124,6 +124,7 @@ object Can {
     fun editGst(c: Context) = Session.isTeam(c) && team(c, F, SM, AC)
     fun deleteSaathi(c: Context) = Session.isTeam(c) && team(c, F)
     fun allEstimates(c: Context) = Session.isTeam(c) && team(c, F, SM, AC, DI)
+    fun editTeamEstimates(c: Context) = Session.isTeam(c) && team(c, F, SM)
     fun stockCount(c: Context) = Session.isTeam(c) && team(c, F, SM, AC, DI)
     fun stockQty(c: Context) = Session.isTeam(c) && team(c, F, SM, AC, DI)
     fun stockValue(c: Context) = Session.isTeam(c) && team(c, F)

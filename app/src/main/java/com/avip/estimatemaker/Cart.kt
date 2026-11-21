@@ -42,8 +42,17 @@ object Cart {
     fun editing(context: Context): String =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString("editing", "") ?: ""
 
-    private fun setEditing(context: Context, number: String) =
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString("editing", number).apply()
+    /** When editing a colleague's estimate: their phone's ID (their row in the log is updated). */
+    fun editDevice(context: Context): String =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString("edit_device", "") ?: ""
+
+    /** Editing a cost estimate made on another phone (it is not kept in My Cost Estimates here). */
+    fun editingTeam(context: Context) = editing(context).isNotBlank() &&
+        editDevice(context).let { it.isNotBlank() && it != Vendor.installId(context) }
+
+    private fun setEditing(context: Context, number: String, device: String = "") =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString("editing", number)
+            .putString("edit_device", if (number.isBlank()) "" else device).apply()
 
     fun changed(context: Context) {
         if (lines.isEmpty()) setEditing(context, "")
@@ -95,9 +104,9 @@ object Cart {
     }
 
     /** Puts a saved quotation back into the cart for editing. */
-    fun loadFrom(context: Context, doc: EstimateDoc, edit: Boolean = false) {
+    fun loadFrom(context: Context, doc: EstimateDoc, edit: Boolean = false, device: String = "") {
         lines.clear()
-        setEditing(context, if (edit) doc.number else "")
+        setEditing(context, if (edit) doc.number else "", device)
         lines += doc.lines.filter { it.productId != null }.map { it.copy() }
             .onEach { if (!Can.specialRates(context)) it.special = false }
         reprice(context)

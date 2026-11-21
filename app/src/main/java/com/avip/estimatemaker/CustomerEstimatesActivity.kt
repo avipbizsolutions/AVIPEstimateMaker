@@ -28,7 +28,7 @@ class CustomerEstimatesActivity : AppCompatActivity() {
     }
 
     private class Item(val number: String, val createdAt: Long, val grandTotal: Double, val items: String,
-                       val madeBy: String, val mine: Boolean, val doc: EstimateDoc?)
+                       val madeBy: String, val mine: Boolean, val doc: EstimateDoc?, val device: String = "")
 
     private lateinit var buyer: Buyer
     private lateinit var list: LinearLayout
@@ -61,7 +61,7 @@ class CustomerEstimatesActivity : AppCompatActivity() {
                 val doc = e.optString("doc").takeIf { it.startsWith("{") }
                     ?.let { runCatching { EstimateDoc.fromJson(JSONObject(it)) }.getOrNull() }
                 Item(e.optString("number"), e.optLong("createdAt"), e.optDouble("grandTotal", 0.0), e.optString("items"),
-                    e.optString("madeBy"), e.optBoolean("mine"), doc)
+                    e.optString("madeBy"), e.optBoolean("mine"), doc, e.optString("device"))
             }
             error = null
         } catch (e: ApiException) {
@@ -119,7 +119,7 @@ class CustomerEstimatesActivity : AppCompatActivity() {
         }
         val opts = mutableListOf(tr("Open PDF", "PDF खोलें"), tr("Send to customer on WhatsApp", "ग्राहक को WhatsApp पर भेजें"))
         if (Can.estimate(this)) {
-            if (e.mine) opts += tr("Edit this cost estimate", "यह लागत अनुमान बदलें")
+            if (e.mine || Can.editTeamEstimates(this)) opts += tr("Edit this cost estimate", "यह लागत अनुमान बदलें")
             opts += tr("Edit as new cost estimate", "नए अनुमान के रूप में बदलें")
         }
         AlertDialog.Builder(this).setTitle(e.number).setItems(opts.toTypedArray()) { _, which ->
@@ -129,7 +129,7 @@ class CustomerEstimatesActivity : AppCompatActivity() {
                     EstimateStore.whatsapp(this, it, buyer.mobile,
                         "Namaste ${buyer.contact.substringBefore(' ')} ji, sharing AVIP cost estimate ${doc.number} for ${buyer.company}. — ${Session.teamName(this)}, AVIP Business Solutions LLP")
                 }
-                else -> edit(doc, existing = e.mine && which == 2)
+                else -> edit(doc, existing = opts[which] == tr("Edit this cost estimate", "यह लागत अनुमान बदलें"), device = if (e.mine) "" else e.device)
             }
         }.show()
     }
@@ -151,10 +151,10 @@ class CustomerEstimatesActivity : AppCompatActivity() {
         }
     }
 
-    private fun edit(doc: EstimateDoc, existing: Boolean) {
+    private fun edit(doc: EstimateDoc, existing: Boolean, device: String = "") {
         val go = {
             TeamTarget.set(this, buyer)
-            Cart.loadFrom(this, doc, edit = existing)
+            Cart.loadFrom(this, doc, edit = existing, device = device)
             startActivity(Intent(this, EstimateActivity::class.java))
         }
         if (Cart.count > 0) AlertDialog.Builder(this)
