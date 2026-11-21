@@ -131,8 +131,11 @@ object Catalog {
         if (p.group.isBlank()) return listOf(p)
         val same = products.filter { it.category == p.category && it.group == p.group }
         if (!p.isPallet) {
-            val loose = same.filter { it.isLoose }
-            val packs = same.filter { !it.isLoose && !it.isPallet }
+            // Coil / packet pairs with its loose rate of the same brand (Finolex 4.0 mm AC coil with
+            // Finolex 4.0 mm AC per mtr, even when Srinilink also has a 4.0 mm AC coil).
+            val sameBrand = same.filter { it.brand == p.brand }
+            val loose = sameBrand.filter { it.isLoose }
+            val packs = sameBrand.filter { !it.isLoose && !it.isPallet }
             if (loose.size == 1 && packs.size == 1 && (p.isLoose || p == packs[0])) return packs + loose
         }
         if (!p.isLoose) {
