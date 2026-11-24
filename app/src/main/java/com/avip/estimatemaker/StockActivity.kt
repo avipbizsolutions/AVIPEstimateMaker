@@ -114,6 +114,12 @@ class StockActivity : AppCompatActivity() {
                     addView(tag(tr("SUBMITTED", "सबमिट"), 0xFFE8F3EC.toInt(), Ui.BRAND))
                 })
                 addView(text("${h.by} · " + tr("${h.items} items · ${h.changed} changed", "${h.items} आइटम · ${h.changed} बदले"), 13.5f, Ui.MUTED))
+                addView(text(tr("View details  ›", "विवरण देखें  ›"), 13.5f, Ui.BRAND, bold = true), lp().margins(context, t = 4))
+                foreground = ripple()
+                setOnClickListener {
+                    startActivity(Intent(this@StockActivity, StockCountDetailActivity::class.java)
+                        .putExtra(StockCountDetailActivity.EXTRA_ID, h.id))
+                }
             }, lp().margins(this, b = 8))
         }
         list.addView(text(tr("Set minimum levels in the \"Current Stock\" tab (Min Level column) of the price sheet.",

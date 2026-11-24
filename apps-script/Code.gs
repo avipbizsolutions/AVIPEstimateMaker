@@ -68,6 +68,7 @@ function doPost(e) {
     if (d.kind === 'editSaathi') return reply(editSaathi(sheet, d));
     if (d.kind === 'deleteSaathi') return reply(deleteSaathi(book, sheet, d));
     if (d.kind === 'stockStatus') return reply(stockStatus(book, d));
+    if (d.kind === 'stockCountDetail') return reply(stockCountDetail(book, d));
     if (d.kind === 'stockStart') return reply(stockStart(d));
     if (d.kind === 'stockCancel') return reply(stockCancel(d));
     if (d.kind === 'stockSubmit') return reply(stockSubmit(book, d));
@@ -402,6 +403,24 @@ function stockStatus(book, d) {
   });
   const history = Object.keys(byId).map(k => byId[k]).sort((a, b) => b.date - a.date).slice(0, 20);
   return { ok: true, current, history, draft: stockDraft_(), godown: GODOWN };
+}
+
+/** One past count, item by item (from "Stock Counts"). */
+function stockCountDetail(book, d) {
+  const u = teamUser(d);
+  need(u, 'stockQty');
+  const { counts } = stockSheets_(book);
+  const id = clean(d.countId);
+  const rows = data(counts).filter(r => String(r[0]) === id);
+  if (!rows.length) return { ok: false, error: 'This count was not found in the sheet.' };
+  return {
+    ok: true, countId: id, date: rows[0][1] instanceof Date ? rows[0][1].getTime() : 0, by: String(rows[0][2] || ''),
+    godown: String(rows[0][3] || GODOWN),
+    items: rows.map(r => ({
+      id: String(r[4]), category: String(r[5] || ''), name: String(r[6] || ''), unit: String(r[7] || ''),
+      qty: Number(r[8]) || 0, last: r[9] === '' ? null : Number(r[9]), diff: r[10] === '' ? null : Number(r[10]), note: String(r[11] || ''),
+    })),
+  };
 }
 
 function stockStart(d) {
