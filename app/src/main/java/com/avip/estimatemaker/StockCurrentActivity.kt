@@ -42,7 +42,11 @@ class StockCurrentActivity : AppCompatActivity() {
             imageTintList = android.content.res.ColorStateList.valueOf(Color.WHITE)
             setPadding(dp(10), dp(10), dp(10), dp(10))
             layoutParams = LinearLayout.LayoutParams(dp(48), dp(48))
-            setOnClickListener { shareReport() }
+            setOnClickListener {
+                androidx.appcompat.app.AlertDialog.Builder(this@StockCurrentActivity).setTitle(tr("Share current stock", "मौजूदा स्टॉक भेजें"))
+                    .setItems(arrayOf(tr("PDF stock statement (accountant / bank)", "PDF स्टॉक स्टेटमेंट (अकाउंटेंट / बैंक)"),
+                        tr("Excel sheet (CSV)", "Excel शीट (CSV)"))) { _, i -> if (i == 0) sharePdf() else shareReport() }.show()
+            }
         }
         val root = vertical()
         if (!exact) share.visibility = android.view.View.GONE
@@ -146,6 +150,29 @@ class StockCurrentActivity : AppCompatActivity() {
                     })
                 }
             }, lp().margins(this, b = 10))
+        }
+    }
+
+    /** Stock statement of every counted item (latest count of each). ₹ values only for Founders. */
+    private fun sharePdf() {
+        val counted = Stock.items().filter { Stock.current.containsKey(it.id) }
+        if (counted.isEmpty()) { Toast.makeText(this, tr("Nothing counted yet", "अभी कुछ नहीं गिना"), Toast.LENGTH_SHORT).show(); return }
+        val items = counted.map { p ->
+            val c = Stock.current[p.id]!!
+            StockPdf.Item(p.category, Stock.label(p), p.unit, Catalog.hsnFor(p.category, p.title), c.qty, null, p.unitPrice, c.note)
+        }
+        val last = Stock.history.firstOrNull()
+        val meta = StockPdf.Meta("STOCK STATEMENT", last?.date?.takeIf { it > 0 } ?: System.currentTimeMillis(),
+            Stock.history.map { it.by }.distinct().take(3).joinToString(", "), "Current stock (latest count of each item)",
+            Stock.godown, showChange = false, withValues = Can.stockValue(this), preparedBy = Session.teamName(this))
+        lifecycleScope.launch {
+            try {
+                val f = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    File(File(cacheDir, "shared").apply { mkdirs() }, "AVIP-Stock-Statement-" +
+                        SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH).format(Date(meta.asOn)) + ".pdf").also { StockPdf(this@StockCurrentActivity).make(items, meta, it) }
+                }
+                StockPdf.share(this@StockCurrentActivity, f, "AVIP stock statement as on " + SimpleDateFormat("dd MMM yyyy", Locale.ENGLISH).format(Date(meta.asOn)))
+            } catch (e: Exception) { Toast.makeText(this@StockCurrentActivity, tr("Couldn't create PDF: ", "PDF नहीं बना: ") + e.message, Toast.LENGTH_LONG).show() }
         }
     }
 
